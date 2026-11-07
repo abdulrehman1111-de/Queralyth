@@ -16,7 +16,7 @@ The challenge is not simply executing a query. It is understanding:
 
 - How the query is structured and processed.
 - How the database determines an execution strategy.
-- Which operations contribute to performance bottlenecks.
+- Which operations may contribute to potential performance concerns..
 - How indexes and query structure influence execution.
 - Whether a proposed optimization actually improves performance.
 

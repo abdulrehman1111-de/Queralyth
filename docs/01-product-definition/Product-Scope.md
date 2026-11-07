@@ -53,6 +53,8 @@ The MVP will establish the core workflow for understanding and analyzing MySQL q
 - Validate query syntax.
 - Display query results in a structured format.
 - Maintain individual query execution histories.
+- Record actual query execution attempts, including successful, failed, and cancelled attempts.
+- Exclude analysis-only operations, such as SQL parsing, logical query representation generation, and MySQL `EXPLAIN` retrieval, from query history.
 - Associate query history entries with the authenticated user.
 - Initially store query text and relevant execution metadata rather than complete result datasets by default.
 

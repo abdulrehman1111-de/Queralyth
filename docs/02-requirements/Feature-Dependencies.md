@@ -1,6 +1,6 @@
-## 11. Feature Dependencies
+# 11. Feature Dependencies
 
-### 11.1 User Account Management Dependencies
+## 11.1 User Account Management Dependencies
 
 User Account Management is a foundational feature for Queralyth because the platform supports individual user accounts and private user-specific resources.
 
@@ -20,7 +20,9 @@ It depends on:
 
 All account-specific resources must be associated with their respective authenticated users. Backend authorization must prevent users from accessing another user's connections, query history, or other private resources.
 
-### 11.2 Database Connection Dependencies
+User authentication and authorization must remain separate from authentication credentials used to connect to external MySQL databases.
+
+## 11.2 Database Connection Dependencies
 
 Database Connection Management is a foundational feature.
 
@@ -42,13 +44,15 @@ It depends on:
 - User-specific connection ownership and authorization.
 - Appropriate database permissions and connection restrictions.
 
-Database credentials must remain on the backend and must not be exposed through frontend interfaces, API responses, or application logs.
+Database credentials must remain on the backend and must not be exposed through frontend interfaces, API responses, application logs, or error messages.
 
-Persisted database credentials must be encrypted at rest, with encryption keys managed separately. Decryption must be restricted to authorized backend operations required to establish database connections.
+Persisted database credentials must be encrypted at rest, with encryption keys managed separately from the stored credentials. Decryption must be restricted to authorized backend operations required to establish database connections.
+
+Database connection configurations must be accessible only to their respective owners through backend-enforced authorization.
 
 Hosted deployments must also enforce appropriate outbound connection restrictions to prevent access to unauthorized internal network resources and other prohibited destinations while allowing approved external MySQL connections.
 
-### 11.3 SQL Query Editor Dependencies
+## 11.3 SQL Query Editor Dependencies
 
 The SQL Query Editor depends on:
 
@@ -58,42 +62,48 @@ The SQL Query Editor depends on:
 - Database connection management.
 - SQL input validation.
 - SQL parsing and supported-query identification.
-- Query execution services.
 - Backend query-safety validation.
+- Query execution services for supported SELECT queries.
 - Execution resource-management mechanisms.
 
 It provides the primary interface for submitting queries to Queralyth.
 
-Query execution must pass backend parsing, validation, and applicable safety restrictions before being submitted to the connected MySQL database.
+Query submission must pass backend parsing, validation, and applicable safety restrictions before being processed further.
+
+The editor must distinguish between submitting a query for analysis, retrieving its estimated execution plan, and executing the query to retrieve results.
 
 Execution infrastructure must also support configurable timeouts, result-size limits, pagination, and cancellation where supported.
 
-### 11.4 SQL Query History Dependencies
+## 11.4 SQL Query History Dependencies
 
 Query History depends on:
 
 - User Account Management.
 - Authentication and session management.
 - Backend authorization and user ownership validation.
-- SQL query submission and execution infrastructure.
+- SQL query execution infrastructure.
 - Query history storage.
 - Query history retrieval and deletion functionality.
+- Query lifecycle and execution-status tracking.
 
 Each user's query history must remain private and accessible only to its owner.
 
-The MVP history functionality should primarily store query text and relevant execution metadata rather than entire query result datasets by default.
+The MVP history functionality must record actual query execution attempts only. These records should primarily store query text and relevant execution metadata rather than entire query result datasets by default.
 
-Query history storage must associate each record with the authenticated user who submitted the corresponding query.
+The history mechanism must accurately distinguish between successful, failed, and cancelled execution attempts.
 
-Execution outcomes must be represented accurately so that failed or cancelled executions are not incorrectly presented as successful executions.
+Analysis-only activities, including SQL parsing, logical query representation generation, and EXPLAIN plan retrieval, must not create query history entries in the MVP.
 
-### 11.5 SQL Query Understanding Dependencies
+Each history record must be associated with the authenticated user who initiated the corresponding execution attempt and must retain enough information to identify the execution outcome accurately.
+
+## 11.5 SQL Query Understanding Dependencies
 
 SQL Query Understanding depends on:
 
 - SQL parsing capabilities.
 - A defined subset of supported SQL syntax.
 - Query structure analysis.
+- Logical query representation mechanisms.
 - Schema information when table and column resolution is required.
 
 Its output will support:
@@ -107,12 +117,15 @@ The MVP will provide a basic logical representation of supported queries. Advanc
 
 The logical query representation must remain distinct from MySQL's physical execution plan.
 
-### 11.6 Execution Plan Analysis Dependencies
+SQL Query Understanding should be capable of analyzing supported query structures independently of actual query execution.
+
+## 11.6 Execution Plan Analysis Dependencies
 
 Execution Plan Analysis depends on:
 
 - A valid MySQL database connection.
 - Supported SQL query parsing and validation.
+- Backend query-safety validation.
 - MySQL EXPLAIN integration.
 - Execution-plan interpretation logic.
 - A structured representation of execution-plan data.
@@ -125,7 +138,9 @@ The initial visualization will provide a basic visual representation of executio
 
 Estimated execution-plan information must not be treated as actual measured performance.
 
-### 11.7 Query Optimization Guidance Dependencies
+Execution-plan retrieval must remain distinct from actual query execution. The system must apply the appropriate validation and database permissions before requesting execution-plan information.
+
+## 11.7 Query Optimization Guidance Dependencies
 
 Query Optimization Guidance depends on:
 
@@ -134,6 +149,7 @@ Query Optimization Guidance depends on:
 - Relevant database schema metadata.
 - Existing index information.
 - Rule-based optimization analysis.
+- A mechanism for associating recommendations with supporting query and database information.
 
 Basic schema metadata retrieval is required in the MVP to support contextual optimization recommendations, particularly indexing opportunities.
 
@@ -143,7 +159,7 @@ The quality of recommendations will depend on the availability and accuracy of q
 
 Recommendations must communicate relevant limitations and must not guarantee performance improvements without appropriate validation.
 
-### 11.8 Optimization Experiment Dependencies
+## 11.8 Optimization Experiment Dependencies
 
 The Optimization Experiment Lab depends on:
 
@@ -153,12 +169,15 @@ The Optimization Experiment Lab depends on:
 - Isolated experiment environments.
 - Execution-plan retrieval.
 - Performance measurement infrastructure.
+- Experiment result storage and comparison.
 
 It will be implemented after the core analysis functionality is stable.
 
 Experiments should use controlled environments rather than automatically modifying production databases.
 
-### 11.9 Performance Benchmarking Dependencies
+Reliable experimentation must account for differences in database state, caching, and other factors that may influence observed results.
+
+## 11.9 Performance Benchmarking Dependencies
 
 Performance Benchmarking depends on:
 
@@ -168,11 +187,13 @@ Performance Benchmarking depends on:
 - Execution-time measurement.
 - Benchmark result storage and comparison.
 
-Reliable benchmarking also requires consideration of factors such as caching, database state, and data distribution.
+Reliable benchmarking also requires consideration of factors such as caching, database state, data distribution, and execution conditions.
 
 Advanced benchmarking functionality will be introduced after the initial query analysis capabilities.
 
-### 11.10 Schema Intelligence Dependencies
+Benchmarking results must distinguish measured execution performance from optimizer estimates.
+
+## 11.10 Schema Intelligence Dependencies
 
 Schema Intelligence depends on:
 
@@ -180,30 +201,36 @@ Schema Intelligence depends on:
 - Database metadata retrieval.
 - Table and column inspection.
 - Relationship and index information.
+- Schema interpretation and visualization mechanisms.
 
 Basic metadata retrieval is required earlier for MVP optimization guidance. However, the complete Schema Intelligence interface, advanced schema visualization, and deeper schema analysis are planned for future releases.
 
 Schema Intelligence will also improve the accuracy and context of optimization recommendations.
 
-### 11.11 AI-Assisted Explanation Dependencies
+## 11.11 AI-Assisted Explanation Dependencies
 
 AI-Assisted Explanations depend on:
 
 - Query analysis results.
+- Structured logical query information.
 - Structured execution-plan information.
 - Optimization recommendation data.
 - A reliable mechanism for providing relevant context to the AI service.
 
 AI functionality must remain supplementary to the core analysis engine and must not become a requirement for essential query analysis functionality.
 
-### 11.12 Unified Workspace Dependencies
+AI-generated explanations must be grounded in available analysis information and must not be presented as verified database performance findings without supporting measurements.
+
+## 11.12 Unified Workspace Dependencies
 
 The Unified Workspace depends on:
 
 - Frontend application infrastructure.
 - Backend API integration.
 - User Account Management and authentication.
+- Database Connection Management.
 - SQL Query Editor functionality.
+- SQL Query History.
 - SQL Query Understanding.
 - Execution Plan Analysis.
 - Query Optimization Guidance.
@@ -211,9 +238,9 @@ The Unified Workspace depends on:
 
 The workspace must bring the core product capabilities together through one integrated interface rather than requiring separate Learning Mode and Engineering Mode experiences.
 
-Individual workspace components may be developed independently, provided their interfaces and integration points remain consistent.
+Individual workspace components may be developed independently, provided their interfaces, data contracts, and integration points remain consistent.
 
-### 11.13 Overall Implementation Order
+## 11.13 Overall Implementation Order
 
 The initial implementation should follow this general dependency sequence:
 
@@ -221,15 +248,16 @@ The initial implementation should follow this general dependency sequence:
 2. User Account Management, authentication, authorization, and user-specific data ownership.
 3. Database Connection Management, secure credential persistence, encryption-key management, and connection restrictions.
 4. SQL parsing, supported-query identification, and backend query validation.
-5. SQL Query Editor and controlled query execution, including execution limits and result management.
-6. User-specific query history storage, retrieval, and deletion integrated with query execution.
-7. Basic SQL Query Understanding and logical query representation.
-8. MySQL execution-plan retrieval and interpretation.
-9. Basic execution-plan visualization.
-10. Basic schema metadata retrieval and query optimization guidance.
-11. Unified Workspace integration and refinement of the core user experience.
-12. Testing, security validation, and stabilization of core functionality.
-13. Advanced analysis, experimentation, and benchmarking capabilities.
+5. SQL Query Editor and controlled query submission.
+6. Query execution infrastructure, including execution safeguards, timeouts, cancellation, result limits, and pagination.
+7. User-specific query history storage, retrieval, and deletion, integrated with actual execution attempts and their outcome tracking.
+8. Basic SQL Query Understanding and logical query representation.
+9. MySQL EXPLAIN integration, execution-plan retrieval, and interpretation.
+10. Basic execution-plan visualization.
+11. Basic schema metadata retrieval and query optimization guidance.
+12. Unified Workspace integration and refinement of the core user experience.
+13. Testing, security validation, and stabilization of core functionality.
+14. Advanced analysis, experimentation, and benchmarking capabilities.
 
 This sequence establishes the essential infrastructure, account security, query validation, and core analysis functionality before introducing advanced features that depend on them.
 

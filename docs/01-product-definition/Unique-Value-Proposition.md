@@ -44,7 +44,7 @@ Users can explore how their SQL statements translate into database operations ra
 
 ### 4.2 Interactive Execution Plan Visualization
 
-Queralyth will transform MySQL execution-plan information into interactive visual representations.
+Queralyth will transform MySQL execution-plan information into visual representations, beginning with basic execution-plan visualization in the MVP and progressing toward more advanced interactive exploration in later releases.
 
 Users will be able to explore execution operations, understand their relationships, and investigate potential bottlenecks more easily.
 
@@ -65,11 +65,15 @@ Queralyth aims to provide a controlled environment where users can investigate a
 
 Users should be able to compare different approaches and understand how changes influence execution behavior.
 
+This capability is planned for post-MVP development.
+
 ### 4.5 Measurable Performance Comparison
 
 Queralyth will provide tools for comparing query performance before and after optimization.
 
 Where actual execution measurements are available, users will be able to evaluate improvements using recorded metrics rather than relying solely on assumptions or estimated costs.
+
+Advanced integrated benchmarking and performance comparison capabilities are planned for later releases.
 
 ### 4.6 Educational and Professional Experience
 

@@ -1,6 +1,6 @@
-## 12. Future Enhancements and Product Evolution
+# 12. Future Enhancements and Product Evolution
 
-### 12.1 Advanced SQL Understanding
+## 12.1 Advanced SQL Understanding
 
 Future versions of Queralyth may introduce:
 
@@ -14,7 +14,7 @@ Future versions of Queralyth may introduce:
 
 These capabilities will expand the initial SQL understanding engine beyond the defined MVP syntax subset and its basic logical operator representations.
 
-### 12.2 Advanced Execution Plan Intelligence
+## 12.2 Advanced Execution Plan Intelligence
 
 Future improvements may include:
 
@@ -28,9 +28,9 @@ Future improvements may include:
 
 These enhancements will help users investigate the differences between the optimizer's estimates and observed execution behavior.
 
-EXPLAIN ANALYZE-based functionality must account for the fact that it executes the analyzed query. Its use must therefore remain subject to the platform's query-safety restrictions and appropriate execution safeguards.
+EXPLAIN ANALYZE-based functionality must account for the fact that it executes the analyzed query. Its use must therefore remain subject to the platform's SQL validation, query-safety restrictions, appropriate database permissions, execution time limits, and other applicable safeguards. It must not be treated as a purely non-executing analysis operation.
 
-### 12.3 Advanced Optimization Lab
+## 12.3 Advanced Optimization Lab
 
 The Optimization Lab may evolve to support:
 
@@ -45,9 +45,11 @@ The Optimization Lab may evolve to support:
 
 All experiments involving database or index modifications must operate within controlled environments rather than automatically modifying production databases.
 
-Experiment results should account for relevant testing conditions, including caching, database state, and data distribution, to avoid misleading performance comparisons.
+Experiment results should account for relevant testing conditions, including caching, database state, data distribution, and execution conditions, to avoid misleading performance comparisons.
 
-### 12.4 Advanced Performance Intelligence
+The platform should clearly distinguish experimental changes from the original database configuration and provide users with understandable information about the scope and outcome of each experiment.
+
+## 12.4 Advanced Performance Intelligence
 
 Future performance capabilities may include:
 
@@ -62,7 +64,9 @@ Future performance capabilities may include:
 
 These capabilities will extend Queralyth from individual query investigation toward more comprehensive performance analysis.
 
-### 12.5 Advanced Schema Intelligence
+Historical comparisons should account for relevant differences in database state, execution conditions, and measurement methodology so that changes in performance are not attributed to query modifications without sufficient evidence.
+
+## 12.5 Advanced Schema Intelligence
 
 Future schema capabilities may include:
 
@@ -76,7 +80,7 @@ Future schema capabilities may include:
 
 The initial MVP will retrieve only the schema metadata required for basic query analysis and optimization guidance. These future capabilities will expand that functionality into a more comprehensive Schema Intelligence feature.
 
-### 12.6 AI-Assisted Database Intelligence
+## 12.6 AI-Assisted Database Intelligence
 
 Future AI capabilities may include:
 
@@ -93,7 +97,11 @@ AI functionality will supplement Queralyth's underlying analysis engine rather t
 
 Core functionality must remain available independently of AI services.
 
-### 12.7 Reporting and Collaboration
+If external AI services are introduced, the platform must apply appropriate safeguards to database schemas, SQL queries, connection information, and other potentially sensitive user data. Data sharing with external services must follow clearly defined privacy and security controls.
+
+AI-generated recommendations must not be presented as verified performance improvements without supporting evidence and appropriate validation.
+
+## 12.7 Reporting and Collaboration
 
 Future versions may introduce:
 
@@ -107,13 +115,33 @@ Future versions may introduce:
 
 These features will extend the platform beyond individual query investigation toward organized and collaborative database analysis.
 
-### 12.8 Product Evolution Strategy
+Collaboration functionality must introduce appropriate access controls and ownership rules to ensure that users can share only the resources they are authorized to share.
+
+Shared analysis information must not automatically expose private database credentials, connection configurations, or other sensitive account information.
+
+## 12.8 Additional Database Platform Support
+
+Although the initial product lifecycle will focus exclusively on MySQL, future versions may evaluate support for additional database management systems.
+
+Potential expansion may include:
+
+- Integration with additional relational database platforms.
+- Database-specific SQL parsing and analysis.
+- Platform-specific execution-plan interpretation.
+- Adaptation of optimization guidance to different database engines.
+- Database-specific performance investigation capabilities.
+
+Additional database support will require separate technical evaluation because SQL syntax, execution-plan structures, optimizer behavior, and optimization strategies may differ between database systems.
+
+Such expansion will be considered only after the MySQL-focused product capabilities are sufficiently mature and reliable.
+
+## 12.9 Product Evolution Strategy
 
 Queralyth will evolve through gradual expansion of its capabilities, with each phase building upon the functionality established in previous releases.
 
 The intended progression is:
 
-**Phase 1 — Core Database Intelligence**
+### Phase 1 — Core Database Intelligence
 
 Establish the foundational platform, including:
 
@@ -130,7 +158,7 @@ Establish the foundational platform, including:
 - Basic schema metadata retrieval and optimization guidance.
 - A unified workspace supporting both educational and engineering-focused use cases.
 
-**Phase 2 — Advanced Query Analysis**
+### Phase 2 — Advanced Query Analysis
 
 Expand the platform's analysis capabilities through:
 
@@ -141,7 +169,7 @@ Expand the platform's analysis capabilities through:
 - Comparison of estimated and actual execution behavior.
 - Advanced interactive execution-plan exploration.
 
-**Phase 3 — Optimization Experimentation**
+### Phase 3 — Optimization Experimentation
 
 Introduce more advanced optimization capabilities through:
 
@@ -152,7 +180,7 @@ Introduce more advanced optimization capabilities through:
 - Evidence-based optimization evaluation.
 - Performance comparison under controlled testing conditions.
 
-**Phase 4 — Advanced Database Intelligence**
+### Phase 4 — Advanced Database Intelligence
 
 Expand Queralyth into a more comprehensive database intelligence platform through:
 
@@ -163,10 +191,13 @@ Expand Queralyth into a more comprehensive database intelligence platform throug
 - Saved analysis and experiment management.
 - Collaboration capabilities.
 - Additional workspace organization features.
+- Evaluation of support for additional database management systems.
 
 The progression may be adjusted as development experience, technical feasibility, and user feedback reveal new priorities.
 
-### 12.9 Long-Term Product Vision
+These phases represent an intended product direction rather than fixed release deadlines. Each enhancement will require appropriate technical evaluation and prioritization before implementation.
+
+## 12.10 Long-Term Product Vision
 
 The long-term goal is to establish Queralyth as a unified database intelligence platform that connects SQL understanding, query execution analysis, performance investigation, and optimization experimentation.
 

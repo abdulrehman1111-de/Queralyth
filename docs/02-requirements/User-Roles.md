@@ -2,27 +2,31 @@
 
 ### 3.1 User Roles
 
-Queralyth will support the following primary user roles:
+Queralyth will support four user roles, organized into primary and secondary target audiences.
 
-#### 1. Student
+**Primary User Roles**
+
+**1. Student**
 
 Students use Queralyth to understand SQL concepts, explore logical query operations, learn how MySQL processes queries, and develop an understanding of database optimization techniques.
 
 Their primary goal is educational understanding rather than production-level database management.
 
-#### 2. Software Developer
+**2. Software Developer**
 
 Software developers use Queralyth to investigate SQL queries, understand execution plans, identify inefficient query patterns, and explore possible performance improvements.
 
 Their primary goal is writing and maintaining efficient database queries in real-world applications.
 
-#### 3. Database Professional
+**Secondary User Roles**
+
+**3. Database Professional**
 
 Database professionals use Queralyth to investigate database execution behavior, evaluate query performance, understand indexing opportunities, and conduct controlled optimization experiments.
 
 Their primary goal is deeper database analysis and performance investigation.
 
-#### 4. Technical Educator
+**4. Technical Educator**
 
 Technical educators use Queralyth as a supporting tool for demonstrating SQL processing, logical query operations, execution plans, and database optimization concepts.
 
@@ -30,7 +34,7 @@ Their primary goal is making complex database concepts easier to teach and demon
 
 ### 3.2 User Personas
 
-#### Persona 1: The Database Student
+**Persona 1: The Database Student**
 
 **Profile:** A computer science student learning advanced database systems and SQL.
 
@@ -47,7 +51,7 @@ Their primary goal is making complex database concepts easier to teach and demon
 
 **Expected Value from Queralyth:** An interactive learning environment that connects SQL theory with MySQL query processing and execution behavior.
 
-#### Persona 2: The Full-Stack Developer
+**Persona 2: The Full-Stack Developer**
 
 **Profile:** A developer building applications that rely on MySQL databases.
 
@@ -64,7 +68,7 @@ Their primary goal is making complex database concepts easier to teach and demon
 
 **Expected Value from Queralyth:** A practical analysis environment that helps investigate and improve SQL query performance.
 
-#### Persona 3: The Database Engineer
+**Persona 3: The Database Engineer**
 
 **Profile:** A professional responsible for database performance, query efficiency, and database reliability.
 
@@ -81,7 +85,7 @@ Their primary goal is making complex database concepts easier to teach and demon
 
 **Expected Value from Queralyth:** A unified environment for query analysis, execution-plan investigation, and optimization evaluation.
 
-#### Persona 4: The Technical Educator
+**Persona 4: The Technical Educator**
 
 **Profile:** An instructor teaching SQL, relational database concepts, or database systems.
 

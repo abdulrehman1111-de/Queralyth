@@ -1,6 +1,6 @@
-## 8. System Constraints and Assumptions
+# 8. System Constraints and Assumptions
 
-### 8.1 Technical Constraints
+## 8.1 Technical Constraints
 
 1. **Database Platform:** The initial version of Queralyth will support MySQL exclusively, targeting compatible MySQL 8.x versions.
 
@@ -18,25 +18,27 @@
 
 8. **Experiment Isolation:** Future optimization experiments must use controlled environments rather than unrestricted production database modifications.
 
-9. **User Authentication:** Access to individual user accounts and account-specific resources must be controlled through backend authentication and authorization mechanisms.
+9. **User Authentication and Authorization:** Access to individual user accounts and account-specific resources must be controlled through backend authentication and authorization mechanisms. Backend authorization must verify resource ownership before allowing access to user-specific information.
 
-10. **User Data Isolation:** The system must ensure that user-specific information, including query history and saved database connections, remains isolated between accounts.
+10. **User Data Isolation:** The system must ensure that user-specific information, including query history and saved database connections, remains isolated between accounts. Ownership checks must be enforced by the backend rather than relying solely on frontend restrictions.
 
-11. **Credential Security:** Database credentials must remain on the backend and must never be exposed through frontend responses or application logs. Credentials associated with saved database connections must be encrypted at rest, with encryption keys managed separately from stored credentials. Access to persisted credentials must be restricted to authorized backend operations.
+11. **Credential Security:** Database credentials must remain on the backend and must never be exposed through frontend responses, application logs, or error messages. Credentials associated with saved database connections must be encrypted at rest, with encryption keys managed separately from stored credentials. Access to persisted credentials and decryption operations must be restricted to authorized backend operations required for establishing database connections.
 
-12. **Query Execution Safety:** Query execution must be subject to backend validation, appropriate execution restrictions, resource limits, and timeouts. Frontend validation alone must not be considered sufficient.
+12. **Query Execution Safety:** Query execution must be subject to backend parsing, validation, appropriate execution restrictions, resource limits, and timeouts. Frontend validation alone must not be considered sufficient. Supported query structures must be checked against the defined execution restrictions before reaching the database.
 
-13. **SQL Statement Restrictions:** The backend must parse and validate submitted SQL queries, reject multiple statements, and enforce an allowlist of supported query structures. Unsupported statement types, locking clauses, file-output operations, and other excluded query forms must not be executed.
+13. **SQL Statement Restrictions:** The backend must parse and validate submitted SQL queries, reject multiple statements, and enforce an allowlist of supported query structures. Unsupported statement types, locking clauses, file-output operations, and other excluded or potentially unsafe query forms must not be executed. The use of SELECT as the primary supported statement type must not be treated as a substitute for validating the complete query structure.
 
-14. **Query Resource Management:** Query execution must be subject to configurable execution time limits, result-size limits, pagination, and cancellation mechanisms where supported.
+14. **Query Resource Management:** Query execution must be subject to configurable execution time limits, result-size limits, pagination, and cancellation mechanisms where supported. These safeguards must be enforced through the backend execution infrastructure.
 
 15. **External Database Connection Restrictions:** For hosted deployments, outbound database connections must be restricted to prevent access to unauthorized internal network resources and other prohibited destinations while allowing approved external MySQL connections.
 
-16. **Execution Measurement Accuracy:** Estimated execution-plan information obtained through EXPLAIN must remain distinct from actual execution measurements. Actual runtime analysis and controlled benchmarking will be introduced according to the product roadmap.
+16. **Database Permission Restrictions:** External database connections must use appropriately restricted database accounts with only the permissions required for supported Queralyth functionality. The application must not assume unrestricted administrative privileges on user databases.
 
-17. **Schema Metadata Availability:** The MVP must retrieve the minimum required table, column, and index metadata needed for query analysis and basic optimization recommendations. Advanced schema visualization and comprehensive schema analysis are outside the initial MVP scope.
+17. **Execution Measurement Accuracy:** Estimated execution-plan information obtained through EXPLAIN must remain distinct from actual execution measurements. Actual runtime analysis and controlled benchmarking will be introduced according to the product roadmap. EXPLAIN-based estimates must not be presented as measured query execution performance.
 
-### 8.2 Product Constraints
+18. **Schema Metadata Availability:** The MVP must retrieve the minimum required table, column, and index metadata needed for query analysis and basic optimization recommendations. Advanced schema visualization and comprehensive schema analysis are outside the initial MVP scope.
+
+## 8.2 Product Constraints
 
 1. Queralyth will provide a unified workspace combining educational and professional database analysis capabilities.
 
@@ -50,17 +52,19 @@
 
 6. Automatic production database modifications will not be part of the initial product.
 
-7. Each user will have an individual account, with access to their own query history and saved resources.
+7. Each user will have an individual account, with access to their own query history and saved database connections.
 
-8. Query history and other account-specific information must be associated with the appropriate user account.
+8. Query history and other account-specific information must be associated with the appropriate authenticated user account.
 
-9. Query history will primarily retain query text and execution metadata rather than complete query result datasets by default.
+9. Query history will primarily retain query text and execution metadata rather than complete query result datasets by default. Execution outcomes must be represented accurately, including failed or cancelled executions where those attempts are retained.
 
 10. The initial MVP will provide basic logical query representations and execution-plan visualizations. Formal relational algebra visualization and advanced interactive plan exploration will remain future enhancements.
 
 11. The initial MVP will provide basic query analysis and optimization guidance rather than promising guaranteed query performance improvements.
 
-### 8.3 Development Assumptions
+12. The initial MVP will distinguish between query analysis, estimated execution-plan retrieval, and actual query execution. These operations must not be presented as interchangeable.
+
+## 8.3 Development Assumptions
 
 1. Users will have access to a compatible MySQL database or the built-in sample database.
 
@@ -68,7 +72,7 @@
 
 3. The development environment will support the selected frontend, backend, and MySQL technologies.
 
-4. MySQL will expose sufficient execution-plan information for the initial analysis features.
+4. MySQL will expose sufficient execution-plan information for the initial analysis features through its supported EXPLAIN functionality.
 
 5. The initial application will prioritize desktop usability.
 
@@ -82,11 +86,13 @@
 
 10. Advanced benchmarking and optimization experiments will be developed after the core analysis engine is established.
 
-11. The initial analysis engine will operate only on supported SQL structures and will communicate when a submitted query cannot be analyzed.
+11. The initial analysis engine will operate only on supported SQL structures and will communicate when a submitted query cannot be analyzed or executed within the defined restrictions.
 
 12. External database connections will use appropriately restricted database accounts with only the permissions required for supported operations.
 
-### 8.4 Future Considerations
+13. The initial MVP will use a defined SQL syntax subset and compatible MySQL versions. Additional SQL syntax and database platform support will require separate evaluation before inclusion.
+
+## 8.4 Future Considerations
 
 The following areas may be reconsidered as Queralyth evolves:
 
@@ -100,3 +106,4 @@ The following areas may be reconsidered as Queralyth evolves:
 - More advanced account management and security features.
 - Additional user workspace customization options.
 - Support for additional database platforms, subject to a separate product decision.
+

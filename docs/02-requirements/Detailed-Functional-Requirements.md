@@ -1,6 +1,6 @@
-## 5. Detailed Functional Requirements
+# 5. Detailed Functional Requirements
 
-### 5.1 User Account Management
+## 5.1 User Account Management
 
 **FR-001: User Registration**
 
@@ -18,7 +18,7 @@ The system shall manage authenticated user sessions and provide users with the a
 
 The system shall ensure that users can access only the data and resources associated with their own accounts, unless explicitly authorized otherwise.
 
-### 5.2 Database Connection Management
+## 5.2 Database Connection Management
 
 **FR-005: Database Connection**
 
@@ -42,9 +42,19 @@ The system shall store persisted database credentials in encrypted form at rest,
 
 **FR-010: User-Specific Connection Management**
 
-The system shall associate saved database connections with their respective user accounts and prevent unauthorized access to another user's connections.
+The system shall associate saved external database connection configurations with their respective user accounts and provide authenticated users with the ability to create, view, update, and delete their own saved connections.
 
-### 5.3 SQL Query Editor
+The system shall validate connection details before presenting an external connection as successfully established and available for use.
+
+The system shall enforce backend ownership checks for all connection-management operations and prevent users from accessing, modifying, or deleting another user's connections.
+
+When a saved connection is updated, the system shall securely handle any associated credential changes and maintain the required encryption-at-rest protections.
+
+When a saved connection is deleted, the system shall remove its associated stored configuration and persisted credentials from the application's active storage.
+
+The built-in sample database shall remain available without requiring users to create or persist an external database connection configuration.
+
+## 5.3 SQL Query Editor
 
 **FR-011: Query Input**
 
@@ -64,11 +74,13 @@ The system shall display query results in a structured and readable format.
 
 **FR-015: Query History**
 
-The system shall maintain a history of previously executed queries associated with the authenticated user's account. History records shall primarily contain query text and execution metadata rather than complete result datasets by default.
+The system shall maintain a history of actual query execution attempts associated with the authenticated user's account, including successful, failed, and cancelled attempts.
+
+History records shall primarily contain query text and relevant execution metadata rather than complete result datasets by default. Analysis-only activities, including SQL parsing, logical query representation generation, and EXPLAIN plan retrieval, shall not create query history entries in the MVP.
 
 **FR-016: Query History Retrieval**
 
-The system shall allow users to retrieve and review their own previously recorded queries.
+The system shall allow users to retrieve and review their own previously recorded query execution attempts.
 
 **FR-017: Query History Management**
 
@@ -76,7 +88,7 @@ The system shall allow users to manage their query history, including removing i
 
 **FR-018: Execution Feedback**
 
-The system shall provide appropriate feedback when a query succeeds, fails, or exceeds its execution limit.
+The system shall provide appropriate feedback when a query execution succeeds, fails, is cancelled, or exceeds its execution limit.
 
 **FR-019: Query Execution Safeguards**
 
@@ -90,7 +102,7 @@ The system shall enforce configurable query execution time limits and provide us
 
 The system shall enforce configurable result-size limits and provide pagination or an equivalent mechanism when displaying larger result sets.
 
-### 5.4 SQL Query Understanding
+## 5.4 SQL Query Understanding
 
 **FR-022: Query Structure Analysis**
 
@@ -112,7 +124,7 @@ The system shall generate a basic logical operator tree or equivalent logical re
 
 The system shall explain the identified query components in understandable language.
 
-### 5.5 Execution Plan Analysis
+## 5.5 Execution Plan Analysis
 
 **FR-027: Execution Plan Retrieval**
 
@@ -138,7 +150,7 @@ The system shall explain important execution-plan operations and properties in u
 
 The system shall distinguish estimated execution-plan information obtained through EXPLAIN from actual execution measurements. It shall not present optimizer estimates as measured runtime performance.
 
-### 5.6 Query Optimization Guidance
+## 5.6 Query Optimization Guidance
 
 **FR-033: Inefficient Pattern Detection**
 
@@ -160,7 +172,7 @@ The system shall explain the reasoning behind each recommendation and identify r
 
 The system shall distinguish evidence-based findings from possible optimization opportunities that require further testing.
 
-### 5.7 Future Functional Requirements
+## 5.7 Future Functional Requirements
 
 The following requirements are planned for later development and are not mandatory for the initial MVP:
 
@@ -204,7 +216,7 @@ The system shall generate reports containing query analysis and optimization fin
 
 The system may provide AI-assisted explanations based on available query analysis and execution-plan information.
 
-### 5.8 Requirement Priority
+## 5.8 Requirement Priority
 
 Functional requirements shall be prioritized as follows:
 
