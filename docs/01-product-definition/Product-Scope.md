@@ -18,37 +18,56 @@ Each stage will introduce capabilities that build upon the previous implementati
 
 The initial focus will be on MySQL 8.x.
 
+The platform will provide separate user accounts, with individual ownership of database connections, query histories, and other user-specific resources.
+
 ## 3. Minimum Viable Product (MVP)
 
-The MVP will establish the core workflow for understanding and analyzing MySQL queries.
+The MVP will establish the core workflow for understanding and analyzing MySQL queries within a unified workspace.
 
-### 3.1 Database Connectivity
+### 3.1 User Account Management
+
+- Allow users to register individual accounts.
+- Provide secure login and logout functionality.
+- Maintain authenticated user sessions.
+- Associate user-specific resources with their respective accounts.
+- Enforce ownership and access restrictions on the backend.
+- Prevent users from accessing another user's database connections or query history.
+
+### 3.2 Database Connectivity
 
 - Connect to a MySQL database.
 - Provide a sample database for users who do not have an existing database.
-- Manage database connection configurations.
+- Allow users to manage their own database connection configurations.
 - Validate database connections.
-- Keep database credentials securely on the backend.
+- Store saved database connection configurations securely on the backend.
+- Persist saved database credentials in encrypted form at rest.
+- Ensure encryption keys are managed separately from stored credentials.
+- Allow credentials to be accessed only by authorized backend operations when establishing database connections.
+- Ensure saved connection configurations are accessible only to their respective owners.
 
-### 3.2 SQL Workspace
+### 3.3 SQL Workspace
 
 - Provide an SQL editor.
-- Allow users to write and submit SQL queries.
+- Allow users to write and submit supported SQL queries.
 - Support basic SQL syntax highlighting.
 - Validate query syntax.
 - Display query results in a structured format.
-- Maintain basic query execution history.
+- Maintain individual query execution histories.
+- Associate query history entries with the authenticated user.
+- Initially store query text and relevant execution metadata rather than complete result datasets by default.
 
-### 3.3 Query Understanding
+### 3.4 Query Understanding
 
 - Analyze supported SQL query structures.
 - Identify tables, columns, joins, filters, and other supported operations.
 - Explain the structure of a query in understandable language.
-- Introduce an initial representation of logical query operations.
+- Provide an initial representation of logical query operations.
 
 The initial implementation will support a defined subset of SQL rather than claiming complete SQL language coverage.
 
-### 3.4 Execution Plan Analysis
+The MVP will focus on basic logical query representations. Formal relational algebra expressions and interactive transformations will be introduced in subsequent development stages.
+
+### 3.5 Execution Plan Analysis
 
 - Integrate MySQL `EXPLAIN`.
 - Retrieve execution-plan information.
@@ -57,14 +76,32 @@ The initial implementation will support a defined subset of SQL rather than clai
 - Identify potential performance concerns.
 - Provide an initial visual representation of execution operations.
 
-### 3.5 Basic Optimization Guidance
+The MVP will focus on estimated execution-plan information. Actual execution analysis through `EXPLAIN ANALYZE` will be introduced after the initial release.
+
+### 3.6 Basic Optimization Guidance
 
 - Identify potential indexing opportunities.
 - Highlight potentially inefficient query patterns.
 - Explain why a particular optimization may be worth investigating.
 - Present suggestions with supporting execution-plan evidence where available.
+- Retrieve the minimum required table, column, and index metadata to support relevant recommendations.
 
 Recommendations will be advisory and will not automatically modify database structures.
+
+### 3.7 Basic Security and Execution Controls
+
+- Restrict initial interactive query analysis to supported SELECT statements.
+- Validate submitted SQL using server-side parsing and validation rather than relying exclusively on frontend checks.
+- Reject multiple statements and unsupported operations, including locking and file-output clauses.
+- Use database accounts with the minimum privileges required for the intended operations.
+- Apply query execution timeouts and result limits.
+- Support appropriate query cancellation and connection-management controls.
+- Keep database credentials on the backend and never expose them through frontend responses.
+- Encrypt persisted database credentials at rest and manage encryption keys separately from stored credentials.
+- Restrict access to saved credentials to authorized backend operations.
+- Prevent credentials and other sensitive connection information from appearing in application logs or error messages.
+- Enforce authenticated access and ownership checks for user-specific resources.
+- Apply appropriate outbound connection restrictions when supporting connections to external databases in a hosted environment.
 
 ## 4. Post-MVP Development
 
@@ -144,6 +181,8 @@ To maintain a manageable development scope, the following will not be included i
 - Distributed database management.
 - Complex team collaboration features.
 - AI-dependent core query analysis.
+- Formal relational algebra visualization and interactive transformations.
+- Advanced schema visualization and comprehensive schema intelligence.
 
 ## 7. Initial Safety and Execution Boundaries
 
@@ -153,11 +192,13 @@ The initial MVP will prioritize controlled query analysis and read-only workflow
 
 Key boundaries include:
 
-- Support SELECT queries for initial interactive analysis.
-- Validate submitted SQL statements.
-- Apply query execution timeouts and result limits.
-- Keep database credentials on the backend.
-- Avoid exposing sensitive connection information to the frontend.
+- Support validated SELECT queries for initial interactive analysis.
+- Use server-side SQL parsing and validation to enforce supported query restrictions.
+- Reject multiple statements, locking clauses, file-output operations, and unsupported query constructs.
+- Use appropriately restricted database accounts.
+- Apply query execution timeouts, result limits, and connection-management safeguards.
+- Keep database credentials on the backend, encrypt persisted credentials at rest, and restrict access to authorized backend operations.
+- Prevent unauthorized access to database connections and query histories.
 - Use isolated sample databases for experimentation.
 - Clearly distinguish estimated execution information from actual measurements.
 - Treat `EXPLAIN ANALYZE` carefully because it executes the analyzed query.
@@ -167,14 +208,17 @@ Key boundaries include:
 
 The MVP should be considered successful when a user can:
 
-1. Connect to a supported MySQL database or use a sample database.
-2. Write and submit a supported SELECT query.
-3. View the query results.
-4. Understand the query's basic structure.
-5. inspect its MySQL execution plan.
-6. Explore an understandable representation of execution operations.
-7. Identify potential performance concerns.
-8. Receive contextual optimization suggestions.
+1. Register and access an individual Queralyth account.
+2. Connect to a supported MySQL database or use a sample database.
+3. Manage their own database connection configuration.
+4. Write and submit a supported SELECT query.
+5. View the query results.
+6. Understand the query's basic structure.
+7. Inspect its MySQL execution plan.
+8. Explore an understandable representation of execution operations.
+9. Identify potential performance concerns.
+10. Receive contextual optimization suggestions.
+11. Access their individual query execution history without accessing another user's records.
 
 The MVP should prioritize correctness, reliability, usability, and technical transparency over the number of available features.
 
@@ -189,10 +233,14 @@ Queralyth will follow these principles throughout development:
 - Ensure recommendations are supported by available evidence.
 - Validate performance improvements through measurements.
 - Introduce advanced capabilities only when the underlying architecture can support them reliably.
+- Enforce user-specific resource ownership and access restrictions.
+- Prioritize secure database interactions and responsible execution practices.
 
 ## 10. Summary
 
 The initial scope of Queralyth is to establish a reliable MySQL query analysis environment that connects SQL understanding, execution-plan interpretation, and contextual optimization guidance.
+
+The MVP will provide individual user accounts, database connectivity, an SQL workspace, query understanding, execution-plan analysis, and basic optimization guidance within a unified workspace.
 
 Advanced visualization, controlled experimentation, benchmarking, schema intelligence, and AI assistance will expand the platform progressively.
 

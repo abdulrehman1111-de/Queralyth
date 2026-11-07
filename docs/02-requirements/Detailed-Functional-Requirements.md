@@ -38,7 +38,7 @@ The system shall provide a built-in sample database so users can explore Queraly
 
 **FR-009: Secure Credential Handling**
 
-Database credentials shall be handled on the backend and shall not be exposed to the frontend. If credentials are persisted, they shall be protected using appropriate encryption and access controls.
+The system shall store persisted database credentials in encrypted form at rest, with encryption keys managed separately from the stored credentials. Credentials shall remain on the backend, shall not be exposed to the frontend, and shall only be accessible to authorized backend operations when establishing database connections. Sensitive credentials shall not be included in application logs or error messages.
 
 **FR-010: User-Specific Connection Management**
 
@@ -52,7 +52,7 @@ The system shall allow users to write and edit SQL queries through a dedicated q
 
 **FR-012: Query Validation**
 
-The system shall validate supported SQL syntax before attempting query execution.
+The system shall validate supported SQL syntax and query structure before attempting query execution.
 
 **FR-013: Query Execution**
 
@@ -64,11 +64,11 @@ The system shall display query results in a structured and readable format.
 
 **FR-015: Query History**
 
-The system shall maintain a history of previously executed queries associated with the authenticated user's account.
+The system shall maintain a history of previously executed queries associated with the authenticated user's account. History records shall primarily contain query text and execution metadata rather than complete result datasets by default.
 
 **FR-016: Query History Retrieval**
 
-The system shall allow users to retrieve and review their own previously executed queries.
+The system shall allow users to retrieve and review their own previously recorded queries.
 
 **FR-017: Query History Management**
 
@@ -78,69 +78,85 @@ The system shall allow users to manage their query history, including removing i
 
 The system shall provide appropriate feedback when a query succeeds, fails, or exceeds its execution limit.
 
+**FR-019: Query Execution Safeguards**
+
+The system shall perform server-side SQL parsing and enforce an allowlist of supported query structures. It shall reject multiple statements, unsupported statement types, locking clauses, file-output operations, and other query forms excluded by the system's execution policy.
+
+**FR-020: Execution Limits and Cancellation**
+
+The system shall enforce configurable query execution time limits and provide users with the ability to cancel supported running queries.
+
+**FR-021: Query Result Limits**
+
+The system shall enforce configurable result-size limits and provide pagination or an equivalent mechanism when displaying larger result sets.
+
 ### 5.4 SQL Query Understanding
 
-**FR-019: Query Structure Analysis**
+**FR-022: Query Structure Analysis**
 
 The system shall analyze supported SQL queries and identify their major structural components.
 
-**FR-020: Table and Column Identification**
+**FR-023: Table and Column Identification**
 
 The system shall identify referenced tables and columns when they can be resolved from the query and available schema information.
 
-**FR-021: Operation Identification**
+**FR-024: Operation Identification**
 
 The system shall recognize supported operations such as filtering, projection, joining, sorting, and grouping.
 
-**FR-022: Logical Query Representation**
+**FR-025: Logical Query Representation**
 
-The system shall generate a logical representation of supported queries.
+The system shall generate a basic logical operator tree or equivalent logical representation of supported queries. This representation shall describe the logical structure of a query and remain distinct from MySQL's physical execution plan.
 
-**FR-023: Query Explanation**
+**FR-026: Query Explanation**
 
 The system shall explain the identified query components in understandable language.
 
 ### 5.5 Execution Plan Analysis
 
-**FR-024: Execution Plan Retrieval**
+**FR-027: Execution Plan Retrieval**
 
-The system shall retrieve execution-plan information from MySQL using EXPLAIN for supported queries.
+The system shall retrieve estimated execution-plan information from MySQL using EXPLAIN for supported queries.
 
-**FR-025: Execution Plan Interpretation**
+**FR-028: Execution Plan Interpretation**
 
-The system shall interpret available execution-plan properties and identify relevant operations.
+The system shall interpret available execution-plan properties and identify relevant operations, access methods, and optimizer estimates.
 
-**FR-026: Execution Plan Visualization**
+**FR-029: Execution Plan Visualization**
 
-The system shall represent execution-plan information through an interactive visual structure.
+The system shall represent execution-plan information through a basic visual structure in the MVP. Advanced interactive exploration and manipulation of execution-plan visualizations may be introduced in later releases.
 
-**FR-027: Potential Bottleneck Identification**
+**FR-030: Potential Bottleneck Identification**
 
 The system shall highlight operations that may deserve further performance investigation based on available execution-plan information.
 
-**FR-028: Execution Plan Explanation**
+**FR-031: Execution Plan Explanation**
 
-The system shall explain important execution-plan operations and properties.
+The system shall explain important execution-plan operations and properties in understandable language.
+
+**FR-032: Estimated and Actual Performance Distinction**
+
+The system shall distinguish estimated execution-plan information obtained through EXPLAIN from actual execution measurements. It shall not present optimizer estimates as measured runtime performance.
 
 ### 5.6 Query Optimization Guidance
 
-**FR-029: Inefficient Pattern Detection**
+**FR-033: Inefficient Pattern Detection**
 
 The system shall identify supported SQL patterns that may negatively affect query performance.
 
-**FR-030: Index Opportunity Detection**
+**FR-034: Index Opportunity Detection**
 
-The system shall identify potential indexing opportunities using available schema and execution-plan information.
+The system shall identify potential indexing opportunities using the minimum required table, column, index, and execution-plan metadata available in the MVP.
 
-**FR-031: Optimization Recommendations**
+**FR-035: Optimization Recommendations**
 
 The system shall provide contextual recommendations for improving supported queries.
 
-**FR-032: Recommendation Explanation**
+**FR-036: Recommendation Explanation**
 
 The system shall explain the reasoning behind each recommendation and identify relevant trade-offs.
 
-**FR-033: Recommendation Transparency**
+**FR-037: Recommendation Transparency**
 
 The system shall distinguish evidence-based findings from possible optimization opportunities that require further testing.
 
@@ -148,21 +164,52 @@ The system shall distinguish evidence-based findings from possible optimization 
 
 The following requirements are planned for later development and are not mandatory for the initial MVP:
 
-- **FR-034:** The system shall allow users to create controlled optimization experiments.
-- **FR-035:** The system shall allow comparison of alternative SQL query versions.
-- **FR-036:** The system shall support repeated query benchmark runs.
-- **FR-037:** The system shall calculate median execution times from benchmark runs.
-- **FR-038:** The system shall provide advanced database schema visualization, including tables and relationships.
-- **FR-039:** The system shall allow users to save and revisit detailed query analysis results.
-- **FR-040:** The system shall generate reports containing query analysis and optimization findings.
-- **FR-041:** The system may provide AI-assisted explanations based on available query analysis information.
+**FR-038: Optimization Experiments**
+
+The system shall allow users to create controlled optimization experiments in an isolated environment.
+
+**FR-039: Query Version Comparison**
+
+The system shall allow users to compare alternative SQL query versions.
+
+**FR-040: Query Benchmarking**
+
+The system shall support repeated query benchmark runs under controlled conditions.
+
+**FR-041: Benchmark Statistics**
+
+The system shall calculate median execution times and provide relevant performance comparison statistics from benchmark runs.
+
+**FR-042: Advanced Schema Intelligence**
+
+The system shall provide advanced database schema visualization, including tables and relationships, along with additional schema analysis capabilities.
+
+**FR-043: Advanced Relational Algebra Visualization**
+
+The system shall support formal relational algebra representations and interactive exploration of logical query transformations.
+
+**FR-044: Advanced Execution Plan Exploration**
+
+The system shall provide advanced interactive execution-plan visualization and exploration capabilities.
+
+**FR-045: Saved Analysis Results**
+
+The system shall allow users to save and revisit detailed query analysis results.
+
+**FR-046: Analysis Reports**
+
+The system shall generate reports containing query analysis and optimization findings.
+
+**FR-047: AI-Assisted Explanations**
+
+The system may provide AI-assisted explanations based on available query analysis and execution-plan information.
 
 ### 5.8 Requirement Priority
 
 Functional requirements shall be prioritized as follows:
 
-- **MVP:** FR-001 through FR-033, with the scope and limitations defined in the Product Scope document.
-- **Post-MVP:** FR-034 through FR-040.
-- **Future Enhancement:** FR-041.
+- **MVP:** FR-001 through FR-037, with the scope and limitations defined in the Product Scope document.
+- **Post-MVP:** FR-038 through FR-046.
+- **Future Enhancement:** FR-047.
 
 Implementation shall follow the agreed development roadmap rather than treating every requirement as an immediate development task.

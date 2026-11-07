@@ -23,21 +23,27 @@ The initial MVP will include the following capabilities:
 
 #### 2. Database Connection Management
 
-- Connect to a supported MySQL database.
+- Connect to a supported MySQL 8.x database.
 - Provide a built-in sample database.
 - Validate database connection details.
 - Allow authenticated users to manage their own saved database connections.
 - Handle connection failures appropriately.
 - Protect database credentials through backend-only handling and appropriate security controls.
+- Use appropriately restricted database accounts with only the permissions required for supported operations.
+- Restrict outbound database connections in hosted deployments to prevent access to unintended network destinations.
 
 #### 3. SQL Query Editor
 
 - Provide an interface for writing SQL queries.
 - Support basic SQL syntax highlighting.
-- Validate supported SQL statements.
+- Validate supported SQL statements through server-side parsing and validation.
 - Execute supported SELECT queries subject to backend validation and execution restrictions.
+- Reject multiple statements, unsupported statement types, locking clauses, file-output operations, and other excluded query structures.
 - Display query results in a structured table.
+- Enforce configurable query execution time limits and provide query cancellation where supported.
+- Enforce configurable result-size limits and provide pagination or an equivalent mechanism for larger result sets.
 - Maintain individual query histories associated with authenticated user accounts.
+- Store query text and execution metadata rather than complete result datasets by default.
 - Allow users to retrieve and review their previous queries.
 - Allow users to remove individual query history entries.
 
@@ -46,16 +52,19 @@ The initial MVP will include the following capabilities:
 - Parse a defined subset of SQL.
 - Identify tables, columns, filters, and joins where supported.
 - Recognize major logical query operations.
-- Generate a basic logical query representation.
+- Generate a basic logical operator tree or equivalent logical query representation.
 - Explain the structure of supported queries.
+- Distinguish the logical query representation from MySQL's physical execution plan.
 
 #### 5. Execution Plan Analysis
 
-- Retrieve MySQL execution plans using EXPLAIN.
+- Retrieve estimated MySQL execution plans using EXPLAIN.
 - Interpret important execution-plan properties.
 - Display execution-plan information in a structured format.
-- Provide an interactive execution-plan visualization.
+- Provide a basic visual representation of execution-plan operations.
 - Highlight operations that may deserve further investigation.
+- Explain important execution-plan properties and operations.
+- Clearly distinguish optimizer estimates from actual execution measurements.
 
 #### 6. Basic Optimization Guidance
 
@@ -64,7 +73,8 @@ The initial MVP will include the following capabilities:
 - Highlight potential indexing opportunities.
 - Provide contextual optimization suggestions.
 - Explain the reasoning behind recommendations.
-- Clearly communicate that suggestions require validation.
+- Clearly communicate that suggestions are potential improvements and require validation.
+- Avoid guaranteeing performance improvements based solely on estimated execution-plan information.
 
 #### 7. Unified Workspace
 
@@ -78,16 +88,17 @@ The initial MVP will include the following capabilities:
 The following features will be developed after the MVP:
 
 - Advanced relational algebra visualization and interactive transformations.
-- EXPLAIN ANALYZE-based runtime investigation.
+- EXPLAIN ANALYZE-based actual runtime investigation.
 - Optimization Experiment Lab.
-- Advanced performance benchmarking.
-- Comprehensive schema visualization.
+- Advanced performance benchmarking and repeated benchmark comparisons.
+- Comprehensive schema visualization and advanced schema analysis.
 - AI-assisted explanations.
 - Advanced reporting and saved analysis.
 - Collaboration features.
 - Support for additional database management systems.
 - Separate Learning Mode and Engineering Mode interfaces.
 - Advanced account customization and collaboration management.
+- Advanced interactive execution-plan exploration.
 
 ### 9.4 MVP Release Criteria
 
@@ -99,19 +110,27 @@ The MVP will be considered ready for release when:
 4. Users can access only their own account-specific resources.
 5. Users can connect to a supported MySQL database or use the built-in sample database.
 6. Users can manage their own saved database connections securely.
-7. Users can submit supported SELECT queries.
-8. Query results are displayed correctly.
-9. Users can retrieve and review their individual query histories.
-10. Users can remove individual query history entries.
-11. The system can analyze supported query structures.
-12. The system can retrieve and interpret relevant MySQL execution-plan information.
-13. Execution plans are presented in an understandable visual format.
-14. The system can identify selected potential optimization opportunities using available query, execution-plan, and schema information.
-15. The unified workspace provides access to both educational explanations and engineering-focused analysis capabilities.
-16. Connection failures and query errors are handled appropriately.
-17. Database credentials and database operations are handled securely.
-18. Core functionality passes its required tests.
-19. The application provides a usable experience across supported desktop browsers.
+7. Database credentials are not exposed through frontend code, application responses, or logs.
+8. Database connections use appropriately restricted permissions.
+9. Users can submit supported SELECT queries.
+10. The backend validates SQL queries and rejects multiple statements and excluded query structures.
+11. Query execution timeouts and result-size limits are enforced.
+12. Users can cancel supported running queries.
+13. Query results are displayed correctly, with pagination or equivalent handling for larger result sets.
+14. Users can retrieve and review their individual query histories.
+15. Users can remove individual query history entries.
+16. The system can analyze supported query structures and generate basic logical representations.
+17. The system can retrieve and interpret relevant MySQL execution-plan information.
+18. Execution plans are presented in an understandable basic visual format.
+19. Estimated execution-plan information is clearly distinguished from actual execution measurements.
+20. The system can identify selected potential optimization opportunities using available query, execution-plan, and schema information.
+21. Optimization recommendations include understandable explanations and appropriate limitations.
+22. The unified workspace provides access to both educational explanations and engineering-focused analysis capabilities.
+23. Connection failures, validation errors, and query execution errors are handled appropriately.
+24. Users cannot access another user's query history or saved database connections by manipulating application requests.
+25. Hosted deployments enforce appropriate restrictions on outbound database connections.
+26. Core functionality passes its required tests, including security, authorization, and data-isolation tests.
+27. The application provides a usable experience across supported desktop browsers.
 
 ### 9.5 MVP Success Indicators
 
@@ -123,6 +142,7 @@ The initial release should demonstrate that users can:
 - Interpret important execution-plan operations.
 - Identify potential performance concerns.
 - Understand why an optimization recommendation was generated.
+- Distinguish estimated execution information from actual performance measurements.
 - Explore educational and engineering-focused capabilities within one unified workspace.
 - Use Queralyth as a practical learning and query investigation environment.
 

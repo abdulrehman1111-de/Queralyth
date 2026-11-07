@@ -5,13 +5,14 @@
 Future versions of Queralyth may introduce:
 
 - Broader SQL syntax support.
-- More advanced relational algebra transformations.
+- Formal relational algebra expressions and more advanced transformations.
 - Detailed logical query-plan visualization.
 - Step-by-step query transformation explanations.
 - Deeper analysis of nested queries and complex joins.
 - More comprehensive analysis of complex SQL statements.
+- Interactive exploration of logical query operations.
 
-These capabilities will expand the initial SQL understanding engine beyond the defined MVP syntax subset.
+These capabilities will expand the initial SQL understanding engine beyond the defined MVP syntax subset and its basic logical operator representations.
 
 ### 12.2 Advanced Execution Plan Intelligence
 
@@ -20,11 +21,14 @@ Future improvements may include:
 - More detailed MySQL execution-plan interpretation.
 - Better identification of potentially expensive operations.
 - Comparison of estimated and actual execution behavior through capabilities such as EXPLAIN ANALYZE.
-- More advanced visualization of execution-plan relationships.
+- More advanced visualization and interactive exploration of execution-plan relationships.
 - Historical execution-plan comparisons.
 - Deeper investigation of query execution behavior.
+- Analysis of differences between optimizer estimates and observed execution measurements.
 
 These enhancements will help users investigate the differences between the optimizer's estimates and observed execution behavior.
+
+EXPLAIN ANALYZE-based functionality must account for the fact that it executes the analyzed query. Its use must therefore remain subject to the platform's query-safety restrictions and appropriate execution safeguards.
 
 ### 12.3 Advanced Optimization Lab
 
@@ -37,8 +41,11 @@ The Optimization Lab may evolve to support:
 - Detailed performance comparison reports.
 - Experiment history and saved configurations.
 - Evaluation of alternative optimization strategies.
+- Evidence-based comparison of optimization outcomes.
 
 All experiments involving database or index modifications must operate within controlled environments rather than automatically modifying production databases.
+
+Experiment results should account for relevant testing conditions, including caching, database state, and data distribution, to avoid misleading performance comparisons.
 
 ### 12.4 Advanced Performance Intelligence
 
@@ -51,6 +58,7 @@ Future performance capabilities may include:
 - Comparisons across different query versions.
 - Identification of performance changes under different dataset conditions.
 - Analysis of performance behavior across repeated executions.
+- Historical comparison of actual query execution measurements.
 
 These capabilities will extend Queralyth from individual query investigation toward more comprehensive performance analysis.
 
@@ -64,6 +72,7 @@ Future schema capabilities may include:
 - Schema design recommendations.
 - Identification of potentially redundant or ineffective indexes.
 - More advanced analysis of database structure and indexing strategies.
+- Detailed exploration of table relationships and indexing decisions.
 
 The initial MVP will retrieve only the schema metadata required for basic query analysis and optimization guidance. These future capabilities will expand that functionality into a more comprehensive Schema Intelligence feature.
 
@@ -82,6 +91,8 @@ AI-generated suggestions must remain transparent and subject to technical valida
 
 AI functionality will supplement Queralyth's underlying analysis engine rather than replace its deterministic query analysis and execution-plan interpretation capabilities.
 
+Core functionality must remain available independently of AI services.
+
 ### 12.7 Reporting and Collaboration
 
 Future versions may introduce:
@@ -92,6 +103,7 @@ Future versions may introduce:
 - Collaborative investigation workflows.
 - Project-based organization of database analysis.
 - More advanced organization of query history and saved analyses.
+- Additional workspace organization and collaboration capabilities.
 
 These features will extend the platform beyond individual query investigation toward organized and collaborative database analysis.
 
@@ -105,13 +117,16 @@ The intended progression is:
 
 Establish the foundational platform, including:
 
-- Individual user accounts and authentication.
+- Individual user accounts, authentication, and authorization.
 - Secure database connectivity and user-specific connection management.
-- SQL query editing and controlled execution.
+- Secure persistence of saved database credentials using encryption at rest and separately managed encryption keys.
+- Backend-only credential access and appropriate connection restrictions.
+- SQL query editing, server-side validation, and controlled execution.
+- Query execution safeguards, resource limits, and result management.
 - User-specific query history.
 - Basic SQL query understanding and logical representation.
-- MySQL execution-plan retrieval and analysis.
-- Execution-plan visualization.
+- MySQL execution-plan retrieval and analysis through EXPLAIN.
+- Basic execution-plan visualization.
 - Basic schema metadata retrieval and optimization guidance.
 - A unified workspace supporting both educational and engineering-focused use cases.
 
@@ -124,6 +139,7 @@ Expand the platform's analysis capabilities through:
 - More detailed execution-plan intelligence.
 - EXPLAIN ANALYZE integration.
 - Comparison of estimated and actual execution behavior.
+- Advanced interactive execution-plan exploration.
 
 **Phase 3 — Optimization Experimentation**
 
@@ -134,6 +150,7 @@ Introduce more advanced optimization capabilities through:
 - Alternative query implementation comparisons.
 - Repeated performance benchmarking.
 - Evidence-based optimization evaluation.
+- Performance comparison under controlled testing conditions.
 
 **Phase 4 — Advanced Database Intelligence**
 
@@ -145,6 +162,7 @@ Expand Queralyth into a more comprehensive database intelligence platform throug
 - Advanced reporting.
 - Saved analysis and experiment management.
 - Collaboration capabilities.
+- Additional workspace organization features.
 
 The progression may be adjusted as development experience, technical feasibility, and user feedback reveal new priorities.
 
