@@ -1,5 +1,7 @@
 ## 4. Core Product Features
 
+All core product features will be accessible through a single unified workspace. Educational explanations and engineering-focused analysis capabilities will be integrated into the same environment, allowing different user personas to use the product according to their needs without switching between separate interfaces or product modes.
+
 ### 4.1 Database Connection Management
 
 Users should be able to connect Queralyth to a supported MySQL  database.
@@ -32,12 +34,9 @@ Queralyth should provide an environment where users can write, edit, and submit 
 Queralyth should analyze the structure of supported SQL queries and explain their logical components.
 
 **Core capabilities:**
-- Identify tables and columns.
-- Identify filtering and joining conditions.
-- Recognize supported SQL operations.
-- Explain the logical structure of a query.
-- Represent query operations through a logical plan.
-- Introduce relational algebra visualizations.
+- Represent supported query operations through a basic logical operator tree.
+- Provide explanations of the logical query structure.
+- Support advanced relational algebra expressions and interactive transformations in future releases.
 
 **MVP Priority:** High for basic structural analysis; advanced relational algebra visualization is post-MVP.
 
@@ -57,14 +56,15 @@ Queralyth should retrieve and interpret execution plan information from MySQL.
 
 ### 4.5 Query Optimization Guidance
 
-Queralyth should identify potential query optimization opportunities based on available query and execution-plan information.
+Queralyth should identify potential query optimization opportunities based on available query, execution-plan, and relevant schema information.
 
 **Core capabilities:**
 - Identify potentially inefficient query patterns.
 - Highlight possible indexing opportunities.
+- Retrieve relevant table, column, and existing index metadata required for basic query analysis and indexing recommendations.
 - Explain why a query pattern may cause performance concerns.
 - Provide contextual optimization suggestions.
-- Explain the expected benefit and possible trade-offs of recommendations.
+- Explain the expected benefits and possible trade-offs of recommendations.
 
 **MVP Priority:** Basic guidance in MVP; advanced recommendations post-MVP.
 

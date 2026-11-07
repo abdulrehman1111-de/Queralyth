@@ -115,3 +115,42 @@ Queralyth will eventually support two complementary experience modes:
 - Controlled benchmarking and experiment comparisons.
 
 Both modes will use the same underlying query analysis engine while presenting information according to the user's needs.
+
+### Unified Workspace Approach
+
+Queralyth will provide a single unified workspace for all supported user roles and personas.
+
+Rather than separating students, developers, and database engineers into different product interfaces, Queralyth will serve their needs through a shared analysis environment powered by the same underlying query analysis engine.
+
+The workspace will provide both accessible explanations and technical analysis capabilities, allowing users to explore information at the level of detail they need.
+
+For example:
+
+- **Students:** Can understand SQL query structure, logical operations, and execution plans through contextual explanations and visualizations.
+- **Software Developers:** Can investigate query execution plans, identify potential performance concerns, and explore optimization opportunities.
+- **Database Engineers:** Can examine execution details, evaluate index-related recommendations, and investigate query performance.
+
+The information presented may vary according to the user's task and the level of technical detail required, but the underlying workspace and core analysis capabilities remain shared.
+
+Separate Learning Mode and Engineering Mode interfaces are not included in the MVP scope. They may be considered as optional experience enhancements in future releases if user feedback demonstrates a clear need.
+
+### Unified Workspace Experience
+
+All core product features will be accessible through a single unified workspace.
+
+Queralyth will not maintain separate Learning Mode and Engineering Mode interfaces in the MVP. Instead, educational explanations, query visualizations, execution-plan analysis, and optimization guidance will be integrated into the same environment.
+
+The workspace will support different user needs through contextual explanations and varying levels of technical detail.
+
+Its core capabilities will include:
+
+- SQL query editing and execution.
+- Query structure understanding and logical representation.
+- MySQL execution-plan analysis and visualization.
+- Contextual explanations of query behavior.
+- Identification of potential performance concerns.
+- Evidence-based optimization recommendations.
+
+The same analysis capabilities will serve all supported user personas. Users will be able to explore the information relevant to their tasks without switching between separate product modes.
+
+Separate specialized interfaces may be considered in future releases based on user feedback and product requirements.
