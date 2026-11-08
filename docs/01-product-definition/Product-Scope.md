@@ -201,7 +201,7 @@ Key boundaries include:
 - Apply query execution timeouts, result limits, and connection-management safeguards.
 - Keep database credentials on the backend, encrypt persisted credentials at rest, and restrict access to authorized backend operations.
 - Prevent unauthorized access to database connections and query histories.
-- Use isolated sample databases for experimentation.
+- Use a centrally managed, read-only sample database for MVP learning and query exploration; defer isolated writable sample databases for experimentation to the post-MVP Optimization Lab.
 - Clearly distinguish estimated execution information from actual measurements.
 - Treat `EXPLAIN ANALYZE` carefully because it executes the analyzed query.
 - Never automatically apply optimization recommendations to a user's database.
@@ -247,3 +247,10 @@ The MVP will provide individual user accounts, database connectivity, an SQL wor
 Advanced visualization, controlled experimentation, benchmarking, schema intelligence, and AI assistance will expand the platform progressively.
 
 The objective is to build a technically sound foundation that can evolve into a comprehensive database intelligence and optimization platform.
+
+### Audit clarification — Built-in sample database (MVP)
+
+The MVP sample database is centrally managed by Queralyth and is read-only for application users. It is logically separate from the Queralyth application schema. The sample schema may share the same physical MySQL 8.x server as the application database when the hosting environment requires it, but it must use a distinct database/schema and a dedicated database account with only the privileges required for read-only sample-query execution. The application database account must not be used for sample queries.
+
+The backend owns the sample-database connection and connection pool. Users do not provide credentials, create a saved connection record, or receive database credentials for this built-in source. The sample dataset is synthetic, version-controlled, and provisioned through deployment/migration or seed procedures. The MVP does not provide per-user writable copies or isolated optimization sandboxes. Isolated writable experimentation remains post-MVP.
+

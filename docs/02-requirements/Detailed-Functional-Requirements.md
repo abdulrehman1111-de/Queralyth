@@ -225,3 +225,16 @@ Functional requirements shall be prioritized as follows:
 - **Future Enhancement:** FR-047.
 
 Implementation shall follow the agreed development roadmap rather than treating every requirement as an immediate development task.
+
+### Audit clarification — FR-008 built-in sample database
+
+The built-in sample database shall be a centrally managed, read-only MySQL 8.x sample schema logically separate from the Queralyth application schema. It shall be accessed through a backend-managed connection using a dedicated least-privilege account. Users shall not need to create a saved connection or supply credentials for this source. The backend shall treat the built-in sample database as a distinct connection target and shall enforce the same SQL allowlist, execution timeouts, result bounds, authorization, and concurrency safeguards as other query targets. The MVP sample data shall be synthetic and version-controlled. Per-user writable sample copies and isolated optimization environments are post-MVP.
+
+### Audit clarification — FR-021 bounded result presentation
+
+The backend shall retrieve and return a bounded result window, enforcing both a configurable maximum row count and maximum serialized response size. The frontend shall paginate the rows already returned by the backend; changing frontend pages shall not re-execute the SQL query or imply that additional database rows were retrieved. The API shall identify the number of returned rows and whether the result was truncated, including the applicable reason (`row_limit` or `response_size_limit`). The MVP shall not calculate an expensive total-row count, keep database cursors open between page requests, or persist complete result datasets.
+
+### Audit clarification — FR-026 query explanations
+
+Explanations shall be generated deterministically from supported parsed SQL structures and the logical query representation using predefined rules/templates. The explanation generator shall describe only components and semantics supported by the parser and available metadata; it shall not invent performance conclusions. AI-assisted explanation generation remains outside the MVP.
+

@@ -176,3 +176,9 @@ The initial release should demonstrate that users can:
 
 The initial MVP will prioritize functional reliability, account security, technical correctness, and meaningful user value over the total number of implemented features.
 
+### Audit clarification — sample data, editor, explanations, and results
+
+The built-in sample database is centrally managed and read-only, logically separate from the application schema, and accessed using a dedicated backend-managed least-privilege connection. No user-saved connection is required. Writable per-user experimentation databases are excluded from the MVP.
+
+Basic SQL syntax highlighting is included in the SQL editor strictly as a frontend presentation feature and does not replace backend SQL parsing or validation. Basic query explanations are generated deterministically from supported parsed structures and logical representations; AI-assisted explanations are excluded. Query results are bounded by backend row and response-size limits. The frontend paginates only the returned result window and clearly indicates truncation; it does not trigger query re-execution for each page.
+

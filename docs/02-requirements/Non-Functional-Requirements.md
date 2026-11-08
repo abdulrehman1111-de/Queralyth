@@ -80,3 +80,8 @@
 - **NFR-052:** The backend should maintain useful application logs for debugging and operational diagnosis.
 - **NFR-053:** Errors should be recorded with sufficient technical context without exposing sensitive information.
 - **NFR-054:** The application should distinguish database errors, query validation errors, authentication and authorization errors, and internal application errors.
+
+### Audit clarification — query explanation accuracy and result resource bounds
+
+Query explanations must be deterministic, traceable to supported parsed structures or logical operators, and avoid unsupported performance assertions. Query-result retrieval must enforce both row-count and serialized-response-size bounds; the user interface must disclose truncation. The MVP must not require persistent result-dataset storage or long-lived database cursors solely to support frontend pagination.
+

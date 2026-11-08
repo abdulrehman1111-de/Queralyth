@@ -118,3 +118,8 @@ This workflow describes how software developers and database engineers can use t
 10. The system verifies record ownership before allowing access to or deletion of a history entry.
 
 **Expected Outcome:** The user can review, revisit, and manage their own actual query execution history while execution outcomes are represented accurately and records belonging to other users remain inaccessible.
+
+### Audit clarification — built-in sample workflow
+
+When the user selects the built-in sample database, the frontend identifies it as a built-in target rather than a user-saved connection. The backend resolves the target to its centrally configured read-only sample connection. No user credentials or saved connection record are requested. Execution, authorization, SQL validation, concurrency, timeout, and bounded-result safeguards remain in force.
+

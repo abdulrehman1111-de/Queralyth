@@ -165,3 +165,19 @@ The application will be accepted for MVP release when:
 
 Acceptance testing must evaluate the functionality included in the initial MVP. Features explicitly excluded from the MVP, including EXPLAIN ANALYZE-based runtime investigation, advanced relational algebra visualization, the Optimization Lab, and advanced benchmarking, are not required for initial MVP acceptance.
 
+### Audit clarification — sample database
+
+- Users can select the centrally managed built-in sample database without creating a saved connection or supplying credentials.
+- Sample queries execute through a dedicated backend-managed connection and a database account restricted to read-only access to the sample schema.
+- The sample schema is logically separate from the application schema; users cannot access application tables through the sample connection.
+- The sample dataset is synthetic and version-controlled. Writable isolated experimentation databases are not required for MVP acceptance.
+
+### Audit clarification — bounded query results and editor explanations
+
+- The backend enforces both maximum returned rows and maximum serialized response size.
+- The frontend paginates the bounded rows already returned and does not re-execute SQL when the user changes pages.
+- The result response identifies `returnedRows`, `truncated`, and, when truncated, `truncationReason` (`row_limit` or `response_size_limit`).
+- The interface clearly indicates when the displayed result window is incomplete.
+- Basic SQL syntax highlighting preserves the submitted SQL text and is not treated as a security control.
+- Query explanations accurately describe supported parsed components using deterministic rules/templates and do not invent unsupported performance claims.
+

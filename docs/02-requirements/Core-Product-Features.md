@@ -160,3 +160,8 @@ Unlike the MVP Query History, which stores previously submitted SQL queries and 
 **MVP Priority:** Post-MVP
 
 The MVP will provide individual query history containing query text and relevant execution metadata. Complete analysis snapshots and report generation will be introduced in future releases.
+
+### Audit clarification — MVP boundaries
+
+The built-in sample database is a centrally managed, read-only MySQL 8.x schema, logically separate from the application schema and accessed only through a backend-managed, least-privilege connection. It is not a writable experimentation sandbox. The MVP SQL Workspace includes basic syntax highlighting as a presentation feature; backend parsing and validation remain authoritative. Query explanations are generated through deterministic rules/templates from supported parsed structures and the logical representation; AI explanations remain future work.
+
