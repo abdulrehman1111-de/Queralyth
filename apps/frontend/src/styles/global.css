@@ -1,0 +1,55 @@
+
+@import "tailwindcss";
+
+/* Queralyth Design System */
+@theme {
+  /* Backgrounds */
+  --color-ql-background: #191b2a;
+  --color-ql-sidebar: #1d1f30;
+  --color-ql-surface: #212337;
+  --color-ql-panel: #272a3d;
+  --color-ql-editor: #191b29;
+
+  /* Borders */
+  --color-ql-border: #35374d;
+
+  /* Typography */
+  --color-ql-text: #e8e8f0;
+  --color-ql-muted: #a0a2b5;
+  --color-ql-subtle: #777b94;
+
+  /* Accents */
+  --color-ql-primary: #8970e8;
+  --color-ql-primary-hover: #9a84f2;
+  --color-ql-cyan: #69c9d6;
+  --color-ql-success: #79c99b;
+  --color-ql-warning: #e6b76d;
+  --color-ql-danger: #e47d88;
+
+  /* Typography */
+  --font-sans: Inter, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Global defaults */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background-color: var(--color-ql-background);
+    color: var(--color-ql-text);
+    font-family: var(--font-sans);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}

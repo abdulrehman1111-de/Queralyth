@@ -1,0 +1,14 @@
+{
+  "name": "queralyth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A MySQL-focused Database Intelligence and Optimization Platform.",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend",
+    "packages/query-engine"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present"
+  }
+}
