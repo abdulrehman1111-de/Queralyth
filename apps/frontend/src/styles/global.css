@@ -1,37 +1,59 @@
 
 @import "tailwindcss";
 
-/* Queralyth Design System */
 @theme {
-  /* Backgrounds */
-  --color-ql-background: #191b2a;
-  --color-ql-sidebar: #1d1f30;
-  --color-ql-surface: #212337;
-  --color-ql-panel: #272a3d;
-  --color-ql-editor: #191b29;
+  /* Backgrounds and surfaces */
+  --color-ql-frame: #1a1d21;
+  --color-ql-panel: #22262b;
+  --color-ql-code: #1e2125;
+  --color-ql-head: #282c32;
+  --color-ql-hover: #2b3036;
+  --color-ql-selected: #2d333b;
 
-  /* Borders */
-  --color-ql-border: #35374d;
+  --color-ql-line: #2f343b;
 
-  /* Typography */
-  --color-ql-text: #e8e8f0;
-  --color-ql-muted: #a0a2b5;
-  --color-ql-subtle: #777b94;
+  --color-ql-fg: #cccccc;
+  --color-ql-fg-secondary: #9da1a6;
+  --color-ql-fg-muted: #6e7681;
 
-  /* Accents */
-  --color-ql-primary: #8970e8;
-  --color-ql-primary-hover: #9a84f2;
-  --color-ql-cyan: #69c9d6;
-  --color-ql-success: #79c99b;
-  --color-ql-warning: #e6b76d;
-  --color-ql-danger: #e47d88;
+  --color-ql-blue: #3794ff;
 
-  /* Typography */
-  --font-sans: Inter, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-ql-button: #0e639c;
+  --color-ql-button-hover: #1177bb;
+
+  --color-ql-ok: #73c991;
+  --color-ql-warn: #cca700;
+
+  --color-ql-chip: #2f343a;
+  --color-ql-avatar: #4b5563;
+
+  --color-ql-sql-keyword: #569cd6;
+  --color-ql-sql-identifier: #9cdcfe;
+  --color-ql-sql-string: #ce9178;
+  --color-ql-sql-number: #b5cea8;
+  --color-ql-sql-text: #d4d4d4;
+
+  --font-sans: "Segoe UI", Inter, system-ui, sans-serif;
+  --font-mono: Consolas, "Courier New", monospace;
+
+  --color-ql-background: var(--color-ql-frame);
+  --color-ql-sidebar: var(--color-ql-panel);
+  --color-ql-surface: var(--color-ql-panel);
+  --color-ql-editor: var(--color-ql-code);
+  --color-ql-border: var(--color-ql-line);
+
+  --color-ql-text: var(--color-ql-fg);
+  --color-ql-muted: var(--color-ql-fg-secondary);
+  --color-ql-subtle: var(--color-ql-fg-muted);
+
+  --color-ql-primary: var(--color-ql-blue);
+  --color-ql-primary-hover: var(--color-ql-button-hover);
+  --color-ql-cyan: var(--color-ql-blue);
+
+  --color-ql-success: var(--color-ql-ok);
+  --color-ql-warning: var(--color-ql-warn);
 }
 
-/* Global defaults */
 @layer base {
   html {
     color-scheme: dark;
@@ -41,9 +63,12 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-    background-color: var(--color-ql-background);
-    color: var(--color-ql-text);
+
+    background-color: var(--color-ql-frame);
+    color: var(--color-ql-fg);
+
     font-family: var(--font-sans);
+    font-size: 13px;
   }
 
   button,
