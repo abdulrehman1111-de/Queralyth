@@ -1,58 +1,124 @@
 
 @import "tailwindcss";
 
-@theme {
-  /* Backgrounds and surfaces */
-  --color-ql-frame: #1a1d21;
-  --color-ql-panel: #22262b;
-  --color-ql-code: #1e2125;
-  --color-ql-head: #282c32;
-  --color-ql-hover: #2b3036;
-  --color-ql-selected: #2d333b;
+/* ========================================
+   QUERALYTH DESIGN SYSTEM
+   Theme: VS Code Inspired Dark Slate
+======================================== */
 
-  --color-ql-line: #2f343b;
+:root {
+  /* Background colors */
+  --ql-frame: #1a1d21;
+  --ql-panel: #22262b;
+  --ql-code: #1e2125;
+  --ql-header: #282c32;
+  --ql-hover: #2b3036;
+  --ql-selected: #2d333b;
 
-  --color-ql-fg: #cccccc;
-  --color-ql-fg-secondary: #9da1a6;
-  --color-ql-fg-muted: #6e7681;
+  /* Border colors */
+  --ql-border: #2f343b;
 
-  --color-ql-blue: #3794ff;
+  /* Text colors */
+  --ql-text-primary: #cccccc;
+  --ql-text-secondary: #9da1a6;
+  --ql-text-muted: #6e7681;
 
-  --color-ql-button: #0e639c;
-  --color-ql-button-hover: #1177bb;
+  /* Accent colors */
+  --ql-accent: #3794ff;
 
-  --color-ql-ok: #73c991;
-  --color-ql-warn: #cca700;
+  /* Button colors */
+  --ql-button: #0e639c;
+  --ql-button-hover: #1177bb;
 
-  --color-ql-chip: #2f343a;
-  --color-ql-avatar: #4b5563;
+  /* Status colors */
+  --ql-success: #73c991;
+  --ql-warning: #cca700;
+  --ql-error: #f14c4c;
 
-  --color-ql-sql-keyword: #569cd6;
-  --color-ql-sql-identifier: #9cdcfe;
-  --color-ql-sql-string: #ce9178;
-  --color-ql-sql-number: #b5cea8;
-  --color-ql-sql-text: #d4d4d4;
+  /* Additional UI colors */
+  --ql-chip: #2f343a;
+  --ql-avatar: #4b5563;
 
-  --font-sans: "Segoe UI", Inter, system-ui, sans-serif;
-  --font-mono: Consolas, "Courier New", monospace;
+  /* SQL syntax colors */
+  --ql-sql-keyword: #569cd6;
+  --ql-sql-identifier: #9cdcfe;
+  --ql-sql-string: #ce9178;
+  --ql-sql-number: #b5cea8;
+  --ql-sql-text: #d4d4d4;
 
-  --color-ql-background: var(--color-ql-frame);
-  --color-ql-sidebar: var(--color-ql-panel);
-  --color-ql-surface: var(--color-ql-panel);
-  --color-ql-editor: var(--color-ql-code);
-  --color-ql-border: var(--color-ql-line);
+  /* Typography */
+  --ql-font-sans: "Segoe UI", Inter, system-ui, sans-serif;
+  --ql-font-mono: Consolas, "Courier New", monospace;
 
-  --color-ql-text: var(--color-ql-fg);
-  --color-ql-muted: var(--color-ql-fg-secondary);
-  --color-ql-subtle: var(--color-ql-fg-muted);
+  /* Font sizes */
+  --ql-font-xs: 12px;
+  --ql-font-sm: 13px;
+  --ql-font-base: 13px;
+  --ql-font-lg: 16px;
+  --ql-font-xl: 20px;
 
-  --color-ql-primary: var(--color-ql-blue);
-  --color-ql-primary-hover: var(--color-ql-button-hover);
-  --color-ql-cyan: var(--color-ql-blue);
+  /* Font weights */
+  --ql-weight-normal: 400;
+  --ql-weight-medium: 500;
+  --ql-weight-semibold: 600;
+  --ql-weight-bold: 700;
 
-  --color-ql-success: var(--color-ql-ok);
-  --color-ql-warning: var(--color-ql-warn);
+  /* Layout dimensions */
+  --ql-sidebar-width: 250px;
+  --ql-titlebar-height: 64px;
+  --ql-statusbar-height: 28px;
+
+  /* Border radius */
+  --ql-radius-sm: 4px;
+  --ql-radius-md: 6px;
+  --ql-radius-lg: 8px;
+
+  /* Spacing */
+  --ql-space-1: 4px;
+  --ql-space-2: 8px;
+  --ql-space-3: 12px;
+  --ql-space-4: 16px;
+  --ql-space-5: 20px;
+  --ql-space-6: 24px;
 }
+
+/* ========================================
+   TAILWIND THEME MAPPING
+======================================== */
+
+@theme {
+  --color-ql-frame: var(--ql-frame);
+  --color-ql-panel: var(--ql-panel);
+  --color-ql-code: var(--ql-code);
+  --color-ql-head: var(--ql-header);
+  --color-ql-hover: var(--ql-hover);
+  --color-ql-selected: var(--ql-selected);
+
+  --color-ql-line: var(--ql-border);
+
+  --color-ql-fg: var(--ql-text-primary);
+  --color-ql-fg-secondary: var(--ql-text-secondary);
+  --color-ql-fg-muted: var(--ql-text-muted);
+
+  --color-ql-blue: var(--ql-accent);
+
+  --color-ql-button: var(--ql-button);
+  --color-ql-button-hover: var(--ql-button-hover);
+
+  --color-ql-ok: var(--ql-success);
+  --color-ql-warn: var(--ql-warning);
+  --color-ql-error: var(--ql-error);
+
+  --color-ql-chip: var(--ql-chip);
+  --color-ql-avatar: var(--ql-avatar);
+
+  --font-sans: var(--ql-font-sans);
+  --font-mono: var(--ql-font-mono);
+}
+
+/* ========================================
+   GLOBAL BASE STYLES
+======================================== */
 
 @layer base {
   html {
@@ -63,12 +129,10 @@
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
-
-    background-color: var(--color-ql-frame);
-    color: var(--color-ql-fg);
-
-    font-family: var(--font-sans);
-    font-size: 13px;
+    background-color: var(--ql-frame);
+    color: var(--ql-text-primary);
+    font-family: var(--ql-font-sans);
+    font-size: var(--ql-font-base);
   }
 
   button,
