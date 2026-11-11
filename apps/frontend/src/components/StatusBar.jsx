@@ -1,42 +1,36 @@
 import React from "react";
-import {
-  Database,
-  Sun,
-  Search,
-} from "lucide-react";
+import { Database, Server, Bell } from "lucide-react";
 
 const StatusBar = () => {
   return (
-    <div className="w-full h-auto lg:p-3 border border-gray-700 flex justify-between items-center">
-      <div className="flex lg:gap-2 items-center">
-        <Database className="lg:w-5 lg:h-5 shrink-0 text-ql-blue" />
-        <p className="font-semibold text-lg text-white/90">Queralyth</p>
-      </div>
-
-      <div>
-        <label
-          htmlFor="searchBar"
-          className="flex items-center border border-gray-700 rounded-lg w-160 h-auto p-2 bg-(--ql-panel) gap-2 focus-within:border-blue-500"
-        >
-          <Search className="lg:w-4 lg:h-4 shrink-0 text-gray-400" />
-          <input
-            className="bg-transparent w-full outline-none border-none"
-            type="text"
-            name="searchBar"
-            id="searchBar"
-            placeholder="Search queries, connections..."
+    <div className="w-full h-auto lg:p-1.5 border border-ql-line flex justify-between items-center">
+      <div className="flex items-center gap-3 px-2">
+        <div className="flex gap-1">
+          <Database
+            className="lg:w-4 lg:h-4 shrink-0 text-ql-fg-muted
+            "
           />
-          <kbd className="text-nowrap border border-gray-700 rounded-md px-2 py-0.5">
-            Ctrl + K
-          </kbd>
-        </label>
+          <p className="text-xs text-ql-fg-secondary">Production DB</p>
+        </div>
+        <div className="flex gap-1">
+          <Server
+            className="lg:w-4 lg:h-4 shrink-0 text-ql-fg-muted
+            "
+          />
+          <p className="text-xs text-ql-fg-secondary">MySQL 8.0</p>
+        </div>
+        <p className="text-xs text-ql-fg-secondary">Query Engine v0.1.0</p>
       </div>
 
-      <div className="flex lg:gap-3 items-center">
-        <Sun className="lg:w-5 lg:h-5 shrink-0 text-gray-400" />
-        <div className="w-7 h-7 bg-gray-500 rounded-full flex justify-center items-center">
-          <p className="font-semibold">U</p>
+      <div className="flex gap-3 items-center px-2">
+        <div className="flex gap-2 items-center">
+          <div className="bg-ql-ok h-2 w-2 rounded-full"></div>
+          <p className="text-xs text-ql-fg-secondary">All Systems online</p>
         </div>
+        <Bell
+          className="lg:w-4 lg:h-4 shrink-0 text-ql-fg-muted
+            "
+        />
       </div>
     </div>
   );

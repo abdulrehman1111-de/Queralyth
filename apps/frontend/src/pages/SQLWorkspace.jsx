@@ -1,11 +1,11 @@
 import React from 'react'
-import StatusBar from '../components/StatusBar'
+import TitleBar from '../components/TitleBar'
 
 
 const SQLWorkspace = () => {
   return (
     <div className='w-full min-h-[95.6vh]'>
-      <StatusBar/>
+      <TitleBar/>
     </div>
   )
 }
