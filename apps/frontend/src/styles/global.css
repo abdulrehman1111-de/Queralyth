@@ -142,3 +142,15 @@
     font: inherit;
   }
 }
+
+.themed-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ql-line) transparent;
+}
+.themed-scroll::-webkit-scrollbar { width: 8px; }
+.themed-scroll::-webkit-scrollbar-track { background: transparent; }
+.themed-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ql-line);
+  border-radius: 4px;
+}
+.themed-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-ql-fg-muted); }

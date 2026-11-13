@@ -15,7 +15,7 @@ const SQLWorkspace = () => {
           </p>
         </div>
 
-        <div className="flex items-center">
+        <div className="flex items-stretch">
           <EditorWindow/>
         </div>
 

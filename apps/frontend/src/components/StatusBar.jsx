@@ -3,7 +3,7 @@ import { Database, Server, Bell } from "lucide-react";
 
 const StatusBar = () => {
   return (
-    <div className="w-full h-auto lg:p-1.5 border border-ql-line flex justify-between items-center">
+    <div className="w-full h-auto lg:p-1.5 border border-ql-line flex justify-between items-center sticky bottom-0 bg-ql-code">
       <div className="flex items-center gap-3 px-2">
         <div className="flex gap-1">
           <Database

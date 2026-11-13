@@ -1,10 +1,14 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import EditorTabs from "./EditorTabs";
 import EditorToolbar from "./EditorToolbar";
 import { SQL_KEYWORDS } from "../SQL Tokens/sql_keywords.js";
+import { useLayoutEffect } from "react";
 
 const EditorWindow = () => {
   const [query, setQuery] = useState("");
+  const textAreaRef = useRef(null);
+  const preRef = useRef(null);
+  const lineNumbersRef = useRef(null)
 
   let splitQuery = query.split("\n");
 
@@ -18,11 +22,11 @@ const EditorWindow = () => {
     const isKeyword = SQL_KEYWORD_SET.has(token.toUpperCase());
     const isNumber = /^\d+$/.test(token);
     const isString = /^(['"])(?:\\.|(?!\1)[^\\])*\1$/.test(token);
-    const isOperator = /^(?:>=|<=|<>|!=|=|>|<|\+|-|\*|\/|%)$/.test(token)
-    const isComment = /^(?:--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)$/.test(token)
-    const isBackTickIdentifier = /^`(?:``|[^`])*`$/.test(token)
-    const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token)
-    const isPunctuation = /^[;,().]$/.test(token)
+    const isOperator = /^(?:>=|<=|<>|!=|=|>|<|\+|-|\*|\/|%)$/.test(token);
+    const isComment = /^(?:--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)$/.test(token);
+    const isBackTickIdentifier = /^`(?:``|[^`])*`$/.test(token);
+    const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token);
+    const isPunctuation = /^[;,().]$/.test(token);
     return {
       token: token,
       isKeyword: isKeyword,
@@ -32,26 +36,45 @@ const EditorWindow = () => {
       isComment: isComment,
       isBackTickIdentifier: isBackTickIdentifier,
       isIdentifier: isIdentifier,
-      isPunctuation: isPunctuation
+      isPunctuation: isPunctuation,
     };
   });
 
+  const onScrollHandler = (e) => {
+    preRef.current.scrollTop = textAreaRef.current.scrollTop;
+    preRef.current.scrollLeft = textAreaRef.current.scrollLeft;
+
+    lineNumbersRef.current.scrollTop = textAreaRef.current.scrollTop;
+    lineNumbersRef.current.scrollLeft = textAreaRef.current.scrollLeft;
+  };
+
+  useLayoutEffect(()=>{
+    preRef.current.scrollTop = textAreaRef.current.scrollTop;
+    preRef.current.scrollLeft = textAreaRef.current.scrollLeft;
+
+    lineNumbersRef.current.scrollTop = textAreaRef.current.scrollTop;
+    lineNumbersRef.current.scrollLeft = textAreaRef.current.scrollLeft;
+  }, [query])
+
   return (
-    <div className="w-full h-[60vh] bg-ql-code rounded-lg border border-ql-line flex flex-col overflow-hidden">
+    <div className="w-full min-h-[60vh] bg-ql-code rounded-lg border border-ql-line flex flex-col overflow-hidden">
       <EditorTabs />
       <EditorToolbar />
 
-      <div className="w-full h-full lg:p-4.5 flex gap-3">
-        <div>
+      <div className="w-full lg:p-4.5 flex gap-3">
+        <div className="h-full overflow-hidden font-mono text-xl leading-7" ref={lineNumbersRef}>
           {splitQuery.map((singleLine, index) => (
-            <div key={index} className="">
-              <p className="text-xl mr-auto text-ql-fg-muted">{index + 1}.</p>
+            <div key={index}>
+              <p className="mr-auto text-ql-fg-muted">{index + 1}.</p>
             </div>
           ))}
         </div>
 
-        <div className="w-full relative font-mono">
-          <pre className="absolute w-full h-full bg-transparent outline-none text-xl pointer-events-none">
+        <div className="w-full relative font-mono flex-1">
+          <pre
+            ref={preRef}
+            className="w-full bg-transparent outline-none text-xl pointer-events-none whitespace-pre-wrap leading-7 pb-5 wrap-break-word m-0 box-border"
+          >
             {SQL_KEYWORDS_INFO.map((keywords, index) => {
               if (keywords.isKeyword) {
                 return (
@@ -71,43 +94,37 @@ const EditorWindow = () => {
                     {keywords.token}
                   </span>
                 );
-              }
-              else if(keywords.isOperator){
+              } else if (keywords.isOperator) {
                 return (
                   <span key={index} className="text-[#dcdcaa]">
                     {keywords.token}
                   </span>
                 );
-              } 
-              else if(keywords.isComment){
+              } else if (keywords.isComment) {
                 return (
                   <span key={index} className="text-[#6a9955]">
                     {keywords.token}
                   </span>
                 );
-              }
-              else if(keywords.isBackTickIdentifier){
+              } else if (keywords.isBackTickIdentifier) {
                 return (
                   <span key={index} className="text-[#9cdcfe]">
                     {keywords.token}
                   </span>
                 );
-              } 
-              else if(keywords.isIdentifier){
+              } else if (keywords.isIdentifier) {
                 return (
                   <span key={index} className="text-[#9cdcfe]">
                     {keywords.token}
                   </span>
                 );
-              } 
-              else if(keywords.isPunctuation){
+              } else if (keywords.isPunctuation) {
                 return (
                   <span key={index} className="text-[#d4d4d4]">
                     {keywords.token}
                   </span>
                 );
-              } 
-              else {
+              } else {
                 return (
                   <span key={index} className="text-[#d4d4d4]">
                     {keywords.token}
@@ -118,10 +135,13 @@ const EditorWindow = () => {
           </pre>
 
           <textarea
+            onScroll={(e) => onScrollHandler(e)}
+            wrap="soft"
+            ref={textAreaRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full h-full relative resize-none bg-transparent outline-none text-xl z-100 text-transparent caret-white
-         placeholder:text-ql-fg-muted"
+            className="absolute inset-0 resize-none bg-transparent outline-none text-xl z-100 text-transparent font-mono box-border caret-white
+         placeholder:text-ql-fg-muted leading-7 p-0 m-0 wrap-break-word scrollbar-none [&::-webkit-scrollbar]:hidden"
             name="textarea"
             id="textarea"
             placeholder="Write your SQL Query here..."

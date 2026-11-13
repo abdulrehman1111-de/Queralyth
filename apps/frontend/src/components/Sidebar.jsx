@@ -31,7 +31,7 @@ const Sidebar = () => {
   )
 
   return (
-    <aside className="border border-ql-line bg-ql-panel min-h-[95.6vh] lg:w-[17%] lg:shrink-0 p-4 pt-5 flex flex-col gap-5">
+    <aside className="border border-ql-line bg-ql-panel h-full overflow-y-auto lg:w-[17%] lg:shrink-0 p-4 pt-5 flex flex-col gap-5">
       <div className="flex lg:gap-2 items-center">
         <Database className="lg:w-5 lg:h-5 shrink-0 text-ql-blue" />
         <p className="font-semibold text-lg text-ql-fg">Queralyth</p>
