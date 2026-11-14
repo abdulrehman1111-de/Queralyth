@@ -4,7 +4,7 @@ import EditorWindow from "../components/SQLWorkspace Components/EditorWindow";
 
 const SQLWorkspace = () => {
   return (
-    <div className="w-full min-h-[95.6vh]">
+    <div className="w-full min-h-full">
       <TitleBar />
 
       <div className="lg:p-5 flex flex-col gap-7">
