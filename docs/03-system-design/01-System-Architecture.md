@@ -1,6 +1,5 @@
 # Queralyth — System Architecture
 
-**Document:** System Architecture  
 **Project:** Queralyth  
 **Version:** 1.0  
 **Status:** Initial design baseline  

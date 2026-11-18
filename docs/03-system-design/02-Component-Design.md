@@ -1,6 +1,5 @@
 # Queralyth — Component Design
 
-**Document:** Component Design  
 **Project:** Queralyth  
 **Version:** 1.0  
 **Status:** Initial design baseline  

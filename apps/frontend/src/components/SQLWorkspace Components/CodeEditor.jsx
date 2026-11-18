@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { SQL_KEYWORDS } from "../SQL Tokens/sql_keywords.js";
 import { useLayoutEffect } from "react";
 
-const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
+const CodeEditor = ({ activeTabData, updateActiveTabQuery }) => {
   const [rows, setRows] = useState(1);
 
   const textAreaRef = useRef(null);
@@ -11,11 +11,13 @@ const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
 
   let splitQuery = activeTabData.sqlQuery.split("\n");
 
+  // Sql_tokens is used to extract every word written in the input so that we can do the tokenization
   const sql_tokens =
     activeTabData.sqlQuery.match(
       /(\s+|`(?:``|[^`])*`|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|--[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/|(?:>=|<=|<>|!=|=|>|<|\+|-|\*|\/|%)|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[^\s])/g,
     ) || [];
 
+  // Tokenization of every word by matching with regex pattern  
   const SQL_KEYWORD_SET = new Set(SQL_KEYWORDS);
   const SQL_KEYWORDS_INFO = sql_tokens.map((token) => {
     const isKeyword = SQL_KEYWORD_SET.has(token.toUpperCase());
@@ -39,6 +41,7 @@ const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
     };
   });
 
+  // Following functions synchronize the textarea scroll with the "pre overlay" scroll
   const onScrollHandler = (e) => {
     preRef.current.scrollTop = textAreaRef.current.scrollTop;
     preRef.current.scrollLeft = textAreaRef.current.scrollLeft;
@@ -47,6 +50,7 @@ const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
     lineNumbersRef.current.scrollLeft = textAreaRef.current.scrollLeft;
   };
 
+  // Synchronize the line numbers too along with pre overlay
   useLayoutEffect(() => {
     preRef.current.scrollTop = textAreaRef.current.scrollTop;
     preRef.current.scrollLeft = textAreaRef.current.scrollLeft;
@@ -55,6 +59,7 @@ const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
     lineNumbersRef.current.scrollLeft = textAreaRef.current.scrollLeft;
   }, [activeTabData.sqlQuery]);
 
+  // Synchorizes the line height of the numbered rows 
   useLayoutEffect(() => {
     setRows(Math.round((preRef.current.scrollHeight - 20) / 28) || 1);
   }, [activeTabData.sqlQuery]);
@@ -65,6 +70,7 @@ const CodeEditor = ({activeTabData, updateActiveTabQuery}) => {
         className="font-mono text-xl leading-7 shrink-0"
         ref={lineNumbersRef}
       >
+        {/* sql code editor numbering */}
         {Array.from({ length: Math.max(rows, splitQuery.length) }, (_, i) => (
           <p key={i} className="text-ql-fg-muted">
             {i + 1}.

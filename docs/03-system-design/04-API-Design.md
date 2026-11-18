@@ -3,7 +3,7 @@
 **Document:** API Design  
 **Project:** Queralyth  
 **Version:** 1.0  
-**Status:** Initial API contract baseline  
+**Status:** Consolidated API contract baseline  
 **API Style:** REST  
 **Communication:** HTTPS + JSON  
 **Backend:** Node.js + Express  
@@ -28,6 +28,7 @@ It establishes:
 - Query-execution lifecycle communication.
 - Pagination and filtering conventions.
 - API security requirements.
+- Temporary query-result availability behavior.
 
 ### 1.2 API Architecture
 
@@ -44,7 +45,8 @@ The backend is responsible for:
 5. Communicating with the application database.
 6. Coordinating the query engine.
 7. Communicating with external MySQL databases when authorized.
-8. Returning structured responses.
+8. Managing execution lifecycle and recovery.
+9. Returning structured responses.
 
 The frontend never connects directly to the application database or external MySQL databases.
 
@@ -154,6 +156,7 @@ Error details must not expose:
 - Database connection strings containing secrets.
 - Sensitive infrastructure details.
 - Unnecessary SQL or internal stack traces.
+- HMAC key material or other fingerprint-generation secrets.
 
 ---
 
@@ -387,6 +390,14 @@ The endpoint must not immediately delete account data while an external executio
 
 The response should communicate that deletion has been initiated or remains pending.
 
+Permanent deletion is permitted only after the account-deletion coordinator confirms that all associated execution requests are terminal.
+
+Requests in `claimed`, `running`, or `recovery_required` states block permanent deletion until their outcomes are resolved.
+
+The deletion coordinator must not treat an expired execution lease as proof that an external database query has stopped.
+
+Administrative audit records must survive account deletion. References to deleted administrators or target users must not prevent preservation of those records.
+
 ---
 
 ## 5. Session Management API
@@ -503,6 +514,10 @@ Expected behavior:
 - Reset previous connection-test information.
 - Update configuration atomically.
 
+`configVersion` must increment on every successful configuration update. It must never wrap or reset. An update that would exceed the supported integer range must fail rather than reuse an earlier version.
+
+The database representation is `BIGINT UNSIGNED NOT NULL DEFAULT 1`.
+
 ### 6.5 Delete Connection
 
 **Endpoint:** `DELETE /api/v1/connections/:connectionId`
@@ -512,6 +527,10 @@ Requires explicit user confirmation through the frontend workflow.
 The backend permanently deletes the connection configuration and encrypted credentials.
 
 Historical query records remain preserved.
+
+The associated `query_history.connection_id` is set to NULL, while the connection-name snapshot remains available.
+
+An execution that has already acquired the required resources may complete under the execution lifecycle rules. Deletion prevents new operations from using the deleted connection.
 
 ### 6.6 Test Connection
 
@@ -553,16 +572,30 @@ Purpose:
 - Detect syntax errors.
 - Return a structured representation when parsing succeeds.
 
-Example request:
+Example request using a saved connection:
 
 ```json
 {
-  "connectionId": "104",
+  "target": {
+    "type": "saved_connection",
+    "connectionId": "104"
+  },
   "sql": "SELECT id, name FROM users WHERE id = 10"
 }
 ```
 
 The backend validates access to the selected connection and applies the supported SQL grammar.
+
+The target may alternatively identify the built-in sample database:
+
+```json
+{
+  "target": {
+    "type": "builtin_sample"
+  },
+  "sql": "SELECT id, name FROM users WHERE id = 10"
+}
+```
 
 ### 7.2 Generate Logical Representation
 
@@ -583,7 +616,8 @@ Purpose: Retrieves and interprets MySQL's estimated execution plan for a support
 Expected behavior:
 
 - Validate the request.
-- Validate connection ownership.
+- Validate the selected target.
+- Validate saved-connection ownership when applicable.
 - Apply the SQL validation policy.
 - Obtain the relevant execution-plan information.
 - Return a structured interpretation.
@@ -615,38 +649,99 @@ This API coordinates actual query execution through the backend query engine.
 
 **Endpoint:** `POST /api/v1/executions`
 
-Example request:
+Example request using a saved connection:
 
 ```json
 {
-  "target": { "type": "saved_connection", "connectionId": "104" },
+  "target": {
+    "type": "saved_connection",
+    "connectionId": "104"
+  },
   "executionRequestId": "550e8400-e29b-41d4-a716-446655440000",
+  "sql": "SELECT id, name FROM users LIMIT 100"
+}
+```
+
+Example request using the built-in sample database:
+
+```json
+{
+  "target": {
+    "type": "builtin_sample"
+  },
+  "executionRequestId": "550e8400-e29b-41d4-a716-446655440001",
   "sql": "SELECT id, name FROM users LIMIT 100"
 }
 ```
 
 The `executionRequestId` is a client-generated UUID.
 
-Expected backend workflow:
+The `target` object must match exactly one supported target format:
+
+- `{ "type": "saved_connection", "connectionId": "..." }`
+- `{ "type": "builtin_sample" }`
+
+The built-in sample target accepts no client-supplied host, port, database name, username, or credentials.
+
+#### Request fingerprint
+
+Every accepted execution request must have a deterministic canonical request representation and a corresponding request fingerprint.
+
+The fingerprint covers all input that determines the meaning of the execution request, including:
+
+- Target type.
+- Saved connection identifier when applicable.
+- Submitted SQL statement.
+- Relevant execution options.
+
+The canonicalization process must be deterministic: semantically identical request payloads represented with different JSON property ordering must produce the same canonical representation and fingerprint.
+
+The backend generates the fingerprint using a secure keyed cryptographic HMAC. HMAC key material remains exclusively in backend-controlled secret configuration and must never be returned to the frontend, stored in the application database, or included in logs.
+
+The database stores the fingerprint, not the original SQL statement in `execution_requests`. The original SQL may separately be stored in `query_history` when the user's history preference permits it.
+
+The fingerprint is bound to the authenticated user's execution-request UUID through the corresponding `execution_requests` record. It is not an authentication credential or a replacement for authorization.
+
+The fingerprint must be calculated from validated, canonical request data before an existing request is classified as a matching replay or a conflicting reuse.
+
+#### Expected backend workflow
 
 1. Authenticate the user.
-2. Validate the request and UUID.
+2. Validate the request structure and `executionRequestId` UUID.
 3. Check account status and permissions.
-4. Check for an existing request with the same UUID; if found, return that existing resource without changing its original target or SQL.
-5. Validate the selected target and, for a saved connection, verify ownership.
-6. Parse and validate the SQL against the supported allowlist before accepting the operation.
-7. Atomically register the execution claim and enforce concurrency limits.
-8. Begin execution only after the claim is committed.
-10. Create a `running` query-history record if history recording is enabled.
-11. Execute through the query engine outside the application database transaction.
-12. Record the terminal execution state.
-13. Return the appropriate execution information.
+4. Validate and canonicalize the execution request.
+5. Generate its request fingerprint using the backend-held HMAC key.
+6. Look up an existing request using the authenticated user and `executionRequestId`.
+7. If an existing request has a matching fingerprint, return the existing execution resource as an idempotent replay without starting another execution.
+8. If an existing request has a different fingerprint, reject the request with HTTP 409 Conflict. Do not modify the original request, start another execution, or create another query-history record.
+9. If no existing request exists, validate the selected target and, for a saved connection, verify ownership.
+10. Parse and validate the SQL against the supported allowlist before accepting the operation.
+11. Begin an application-database transaction.
+12. Atomically register the execution claim, persist its fingerprint, and enforce the applicable concurrency limits.
+13. If query-history recording is enabled, create the corresponding `running` query-history record in the same transaction.
+14. Commit the transaction before beginning external query execution.
+15. If claim creation, fingerprint persistence, or required query-history creation fails, roll back the transaction. Do not start external execution.
+16. Execute through the query engine outside the application-database transaction.
+17. Record the terminal execution state and update the associated query-history record when one exists.
+18. Return the appropriate execution information.
 
-Duplicate requests with the same UUID must not initiate another execution.
+The execution claim, request fingerprint, and required query-history record must be created atomically when history recording is enabled.
 
-An intentional rerun must use a new UUID. The `target` object has exactly one supported target form: `{ "type": "saved_connection", "connectionId": "..." }` or `{ "type": "builtin_sample" }`. The built-in target accepts no client-supplied host or credentials.
+If history recording is disabled, execution-request tracking and lifecycle management remain active without creating a query-history record.
 
-A newly accepted request returns 202 Accepted, for example:
+The history preference is evaluated when the execution is accepted. If history was enabled at that point, its record remains associated with the attempt even if the preference changes while execution is running.
+
+Duplicate requests with the same UUID and matching fingerprint must not initiate another execution or create another query-history record.
+
+Reusing a UUID with a different fingerprint is a conflict, not a new execution and not a valid replay.
+
+An intentional rerun must use a new UUID.
+
+A failure to persist the terminal outcome must be handled through the execution recovery mechanism. The backend must not falsely report a confirmed successful or failed outcome when the actual outcome is uncertain.
+
+#### Acceptance response
+
+A newly accepted request returns 202 Accepted:
 
 ```json
 {
@@ -656,30 +751,148 @@ A newly accepted request returns 202 Accepted, for example:
     "statusUrl": "/api/v1/executions/550e8400-e29b-41d4-a716-446655440000",
     "cancelUrl": "/api/v1/executions/550e8400-e29b-41d4-a716-446655440000/cancel"
   },
-  "meta": { "replayed": false }
+  "meta": {
+    "replayed": false
+  }
 }
 ```
 
-A duplicate request returns the same resource with `meta.replayed: true`; active requests return 202 and terminal requests return 200. A replay never changes the original accepted target or SQL.
+A duplicate request with the same UUID and matching fingerprint returns the same resource with `meta.replayed: true`.
+
+Active requests return 202 and terminal requests return 200.
+
+A replay never changes the original accepted target, SQL, or relevant execution options.
+
+A UUID reuse conflict returns HTTP 409 Conflict:
+
+```json
+{
+  "error": {
+    "code": "IDEMPOTENCY_KEY_REUSED",
+    "message": "This execution request identifier has already been used with a different request."
+  }
+}
+```
+
+The conflicting request does not change the original execution resource and does not initiate another execution.
+
+Validation, authorization, and concurrency rejections are returned as errors. A rejected request must not be represented as an accepted execution.
+
+#### Idempotency behavior
+
+- The idempotency key is scoped to the authenticated user.
+- The logical uniqueness rule is `(user_id, execution_request_id)`.
+- A request fingerprint is generated from the canonical target, SQL, and relevant execution options.
+- Repeating the same UUID with the same fingerprint returns the existing execution resource.
+- Reusing the same UUID with a different fingerprint returns HTTP 409 Conflict with error code `IDEMPOTENCY_KEY_REUSED`.
+- A conflicting reuse must not overwrite the original fingerprint or accepted request details.
+- A replay must not initiate another execution.
+- A replay must not create another query-history record.
+- A conflicting reuse must not initiate an execution or create another query-history record.
+- Concurrent submissions with the same user and UUID must resolve to one accepted request. The database uniqueness rule and transaction/locking strategy must prevent duplicate claims.
+- If concurrent submissions carry different fingerprints, at most one may establish the original request. The other must receive the idempotency conflict response.
+- An intentional rerun requires a new UUID.
+- The frontend must retain the original UUID when retrying the same logical submission after a network interruption. It must generate a new UUID only for an intentional new execution.
 
 ### 8.2 Retrieve Execution Status
 
 **Endpoint:** `GET /api/v1/executions/:executionRequestId`
 
-Returns the current state of an execution request owned by the authenticated user.
+Returns the current execution state for a request owned by the authenticated user.
 
-Example response:
+The response includes:
+
+- `executionRequestId`
+- `state`
+- `createdAt`
+- `startedAt`, when available
+- `completedAt`, when available
+- `resultAvailable`
+- `resultUnavailableReason`
+- Result metadata and bounded result data when available
+
+The state must be one of:
+
+- `claimed`
+- `running`
+- `successful`
+- `failed`
+- `cancelled`
+- `recovery_required`
+
+`resultAvailable` is always a boolean.
+
+#### Result availability rules
+
+`resultUnavailableReason` follows these rules:
+
+- `null` when `resultAvailable` is true.
+- `null` while an execution is non-terminal and has not produced a result.
+- `expired` when the result cache entry expired.
+- `evicted` when the result cache entry was evicted during the current backend process lifetime.
+- `backend_restart` when the result cache was lost because the backend process restarted.
+- `unavailable` when a terminal execution has no retrievable result and a more specific reason cannot be established.
+
+Example response when results are available:
+
+```json
+{
+  "data": {
+    "executionRequestId": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "successful",
+    "createdAt": "2026-11-18T14:00:00Z",
+    "startedAt": "2026-11-18T14:00:01Z",
+    "completedAt": "2026-11-18T14:00:03Z",
+    "resultAvailable": true,
+    "resultUnavailableReason": null,
+    "result": {
+      "columns": ["id", "name"],
+      "rows": [
+        [1, "Example"]
+      ],
+      "returnedRows": 1,
+      "truncated": false,
+      "truncationReason": null
+    }
+  }
+}
+```
+
+Example response while execution is still running:
 
 ```json
 {
   "data": {
     "executionRequestId": "550e8400-e29b-41d4-a716-446655440000",
     "state": "running",
-    "createdAt": "2026-11-08T14:00:00Z",
-    "resultAvailable": false
+    "createdAt": "2026-11-18T14:00:00Z",
+    "startedAt": "2026-11-18T14:00:01Z",
+    "resultAvailable": false,
+    "resultUnavailableReason": null
   }
 }
 ```
+
+Example response when results are unavailable after a backend restart:
+
+```json
+{
+  "data": {
+    "executionRequestId": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "successful",
+    "createdAt": "2026-11-18T14:00:00Z",
+    "completedAt": "2026-11-18T14:00:03Z",
+    "resultAvailable": false,
+    "resultUnavailableReason": "backend_restart"
+  }
+}
+```
+
+The confirmed execution outcome remains available independently of temporary result availability.
+
+The backend must never re-execute SQL automatically to reconstruct missing results.
+
+Execution status retrieval must not change the execution lifecycle state.
 
 ### 8.3 Cancel Execution
 
@@ -687,23 +900,133 @@ Example response:
 
 Purpose: Requests cancellation of an active execution.
 
-Cancellation is not considered successful merely because the request was received. Return 202 Accepted while termination is pending. If the request is already terminal, return 200 with its actual state.
+Cancellation is not considered successful merely because the request was received.
+
+Return 202 Accepted while termination is pending.
+
+If the request is already terminal, return 200 with its actual state.
 
 The backend must confirm actual termination before setting the execution state to `cancelled`.
 
 If termination cannot be confirmed, the execution may enter `recovery_required`.
 
+An expired execution lease does not independently prove that the external database query has stopped.
+
 ### 8.4 Execution Results
 
-Execution results are returned only to the authorized owner.
+Execution results are returned through the execution-status resource:
 
-The response should contain the available execution metadata and bounded result data according to the query-execution limits.
+`GET /api/v1/executions/:executionRequestId`
 
-The MVP does not persist complete query-result datasets by default.
+Results are available only to the authenticated owner of the execution request.
+
+When available, the response includes the bounded result window and its metadata.
+
+Result metadata includes:
+
+- `returnedRows`
+- `truncated`
+- `truncationReason`
+
+`truncationReason` is `null` when the result was not truncated. Otherwise, it identifies `row_limit` or `response_size_limit`.
+
+`returnedRows` represents the number of rows actually included in the returned result window. It does not promise the total number of rows matching the SQL statement.
+
+The API does not promise a total row count.
+
+The initial MVP does not persist complete query-result datasets.
+
+Result windows are maintained in a bounded process-local cache and may become unavailable after expiry, eviction, or backend restart.
+
+The execution lifecycle state and confirmed outcome remain available independently of result data.
+
+The frontend must not automatically re-execute SQL to recover unavailable results.
 
 ---
 
-## 9. Query History API
+## 9. Temporary Result Availability
+
+### 9.1 Cache Behavior
+
+The initial MVP uses a bounded process-local in-memory cache for query-result windows.
+
+The default time-to-live (TTL) is 15 minutes.
+
+The cache is temporary and is not a durable source of execution truth.
+
+Complete query-result datasets are not persisted in `query_history` or `execution_requests`.
+
+Result cache entries are scoped to both:
+
+- Authenticated user.
+- `executionRequestId`.
+
+The backend must enforce result ownership before returning cached data.
+
+### 9.2 Cache-Generation Association
+
+Each execution request that may produce a cached result must be associated with a non-sensitive cache-generation identifier or an equivalent durable logical reference.
+
+This association is a required logical part of the execution/result relationship.
+
+The backend uses it to distinguish:
+
+- Result loss because the backend process restarted.
+- Result loss within the same backend process lifetime.
+
+The generation association must remain available independently of the process-local result cache.
+
+Its exact physical representation may be finalized during implementation, but the logical association is mandatory.
+
+### 9.3 Expiry and Eviction Metadata
+
+Bounded in-memory metadata or tombstones must distinguish expiry and eviction during the current process lifetime.
+
+- `expired` means the result entry reached its TTL.
+- `evicted` means the result entry was removed to satisfy cache capacity or resource-management requirements.
+- `backend_restart` means the process-local cache was lost because the backend process restarted.
+- `unavailable` is used when the backend cannot reliably establish a more specific reason.
+
+Tombstone metadata must itself be bounded and must not become an unbounded storage mechanism.
+
+### 9.4 Backend Restart
+
+If the backend restarts, its previous process-local result cache is considered lost.
+
+Status polling reports:
+
+```json
+{
+  "resultAvailable": false,
+  "resultUnavailableReason": "backend_restart"
+}
+```
+
+for affected results when the generation association establishes that the cache belonged to a previous process lifetime.
+
+The durable execution outcome remains unchanged.
+
+### 9.5 Result Navigation
+
+Frontend result navigation operates only over the currently available bounded result window.
+
+It must not submit another execution request to retrieve missing result data.
+
+The backend must never re-execute SQL automatically because a cached result is unavailable.
+
+### 9.6 Metadata Restrictions
+
+Cache-generation identifiers and tombstone metadata must not contain:
+
+- SQL statements.
+- Query-result datasets.
+- Passwords or credentials.
+- Session tokens.
+- Encryption keys.
+
+---
+
+## 10. Query History API
 
 Base path:
 
@@ -711,7 +1034,7 @@ Base path:
 
 All operations are scoped to the authenticated user.
 
-### 9.1 List History
+### 10.1 List History
 
 **Endpoint:** `GET /api/v1/history`
 
@@ -731,27 +1054,58 @@ Maximum page size: 100.
 
 Ordering: newest first, using `executedAt` and `historyId` for deterministic cursor pagination.
 
-### 9.2 Retrieve History Record
+For built-in sample database executions:
+
+- `connectionId` is NULL.
+- The connection-name snapshot is `Built-in Sample Database`.
+
+History records are retained for 90 days from `executedAt`, subject to the separate backup-retention policy.
+
+### 10.2 Retrieve History Record
 
 **Endpoint:** `GET /api/v1/history/:historyId`
 
 Returns one record after ownership validation.
 
-### 9.3 Delete History Record
+#### History row-count semantics
+
+The database history field `rows_returned` maps to the API's `returnedRows` property.
+
+`returnedRows` represents the number of rows actually included in the bounded result window returned by the execution. It does not represent the total number of rows matching the submitted SQL statement.
+
+The database field `rows_affected` represents a separate execution metric and must not be treated as equivalent to `rows_returned` or `returnedRows`.
+
+If the API exposes the affected-row metric, it must use a separate property named `affectedRows`, mapped to `rows_affected`.
+
+The API must never derive `returnedRows` from `rows_affected`, or imply that either field represents the total number of rows matching a query.
+
+When result data is unavailable, the history record must retain its recorded metadata without implying that the original result dataset can be retrieved.
+
+### 10.3 Delete History Record
 
 **Endpoint:** `DELETE /api/v1/history/:historyId`
 
 Deletes one history record belonging to the authenticated user.
 
-### 9.4 History Recording Preference
+### 10.4 History Recording Preference
 
-History recording is controlled through the account preference endpoint.
+History recording is controlled through:
 
-When disabled, new execution attempts are not persisted to query history. Operational execution-request tracking remains active.
+`PATCH /api/v1/account/preferences`
+
+When `queryHistoryEnabled` is false, new execution attempts are not persisted to query history.
+
+Operational execution-request tracking remains active regardless of this preference.
+
+Existing history records are not affected by changing this preference.
+
+The preference is evaluated when an execution is accepted. If history was enabled when an execution began, its history record remains associated with that attempt even if the preference changes while execution is running.
+
+Analysis-only, parse-only, and EXPLAIN-only operations do not create query-history records.
 
 ---
 
-## 10. Administrator API
+## 11. Administrator API
 
 Base path:
 
@@ -765,19 +1119,19 @@ Every endpoint requires:
 - Backend authorization.
 - Appropriate audit logging.
 
-### 10.1 List Users
+### 11.1 List Users
 
 **Endpoint:** `GET /api/v1/admin/users`
 
 Provides authorized administrative account listing and filtering.
 
-### 10.2 Suspend User
+### 11.2 Suspend User
 
 **Endpoint:** `POST /api/v1/admin/users/:userId/suspend`
 
 Updates account status, revokes sessions, records account-status history, and writes an administrator audit event transactionally.
 
-### 10.3 Restore User
+### 11.3 Restore User
 
 **Endpoint:** `POST /api/v1/admin/users/:userId/restore`
 
@@ -785,7 +1139,7 @@ Restores an eligible suspended account.
 
 Previously revoked sessions remain revoked.
 
-### 10.4 Change User Role
+### 11.4 Change User Role
 
 **Endpoint:** `PATCH /api/v1/admin/users/:userId/role`
 
@@ -793,7 +1147,7 @@ Changes a user's role through an authorized administrative workflow.
 
 The backend must prevent removal of the last active administrator.
 
-### 10.5 Account Deletion Administration
+### 11.5 Account Deletion Administration
 
 **Endpoint:** `POST /api/v1/admin/users/:userId/deletion`
 
@@ -805,9 +1159,11 @@ Cancels an eligible pending deletion where permanent deletion has not begun.
 
 All privileged operations must create corresponding audit records.
 
+Administrative audit records must survive account deletion. References to deleted administrators or target users must not prevent preservation of those records.
+
 ---
 
-## 11. HTTP Status Codes
+## 12. HTTP Status Codes
 
 The API will use standard HTTP status codes consistently.
 
@@ -821,7 +1177,7 @@ The API will use standard HTTP status codes consistently.
 | 401 | Unauthorized | Missing or invalid authentication |
 | 403 | Forbidden | Authenticated but not authorized |
 | 404 | Not Found | Resource unavailable or not visible to caller |
-| 409 | Conflict | Stale configuration or conflicting operation |
+| 409 | Conflict | Stale configuration, idempotency-key reuse with a different payload, or conflicting operation |
 | 413 | Content Too Large | Request exceeds permitted size |
 | 415 | Unsupported Media Type | Unsupported request content type |
 | 422 | Unprocessable Content | Valid JSON but invalid operation or input |
@@ -835,9 +1191,9 @@ The API must not expose sensitive internal diagnostic information in error respo
 
 ---
 
-## 12. Validation and Security
+## 13. Validation and Security
 
-### 12.1 Backend Validation
+### 13.1 Backend Validation
 
 Every request must be validated by the backend.
 
@@ -856,8 +1212,12 @@ Validation includes:
 - Allowed execution operations.
 - Pagination limits.
 - Request size limits.
+- Execution idempotency identifiers.
+- Canonical execution-request fingerprint generation.
+- Target-object structure.
+- Relevant execution-option validation.
 
-### 12.2 Authentication
+### 13.2 Authentication
 
 - Server-managed sessions.
 - Secure session cookies.
@@ -867,7 +1227,7 @@ Validation includes:
 - Session revocation.
 - Account-status checks.
 
-### 12.3 Authorization
+### 13.3 Authorization
 
 Every user-owned resource must be checked against the authenticated user.
 
@@ -875,14 +1235,14 @@ The backend must never trust a client-supplied `userId` as proof of ownership.
 
 Administrator endpoints require separate role-based authorization.
 
-### 12.4 CSRF and CORS
+### 13.4 CSRF and CORS
 
 - Apply CSRF protection to cookie-authenticated state-changing requests.
 - Restrict CORS to explicitly approved origins.
 - Do not use unrestricted credentialed cross-origin access.
 - Configure SameSite cookie behavior appropriately for the deployment.
 
-### 12.5 SQL Execution Protection
+### 13.5 SQL Execution Protection
 
 SQL execution endpoints must enforce backend safeguards.
 
@@ -900,7 +1260,11 @@ These include:
 
 A frontend-only check or a simple keyword filter is insufficient.
 
-### 12.6 Rate Limiting
+The built-in sample database must be resolved exclusively by the backend to its deployment-configured, read-only sample database connection.
+
+Clients cannot override its host, port, database name, username, or credentials.
+
+### 13.6 Rate Limiting
 
 Apply rate limits to sensitive operations, including:
 
@@ -916,7 +1280,7 @@ Rate limits should be configurable and enforced by the backend.
 
 ---
 
-## 13. Pagination and Filtering
+## 14. Pagination and Filtering
 
 Collection endpoints should use a consistent pagination approach.
 
@@ -928,13 +1292,19 @@ History ordering uses:
 
 This avoids relying solely on timestamps when multiple records share the same timestamp.
 
+Both fields must be included in cursor comparisons and ordering.
+
+Default page size is 20. The minimum is 1 and the maximum is 100.
+
 Backend validation enforces page-size limits and validates cursor values.
 
 Filtering is performed only within the authenticated user's authorized dataset.
 
+Search and filtering must use parameterized database queries.
+
 ---
 
-## 14. Asynchronous Operations
+## 15. Asynchronous Operations
 
 Some operations may take longer than a typical API request.
 
@@ -959,9 +1329,17 @@ The backend must distinguish between:
 
 An accepted request must never be presented as a completed operation.
 
+An expired execution lease does not independently prove that an external database query has stopped.
+
+The backend must use its execution recovery process to establish the actual outcome before treating an uncertain execution as terminal.
+
+Cancellation is terminal only after external termination has been confirmed. If termination remains uncertain, the execution must remain unresolved or enter `recovery_required`.
+
+The account-deletion coordinator must block permanent deletion while any associated execution request remains in `claimed`, `running`, or `recovery_required`.
+
 ---
 
-## 15. API Error Handling
+## 16. API Error Handling
 
 Errors must use stable machine-readable error codes.
 
@@ -974,17 +1352,35 @@ Initial error-code categories include:
 | Validation | `VALIDATION_ERROR`, `INVALID_REQUEST` |
 | Connections | `CONNECTION_NOT_FOUND`, `CONNECTION_TEST_FAILED` |
 | Concurrency | `CONCURRENCY_LIMIT_REACHED`, `STALE_CONFIGURATION` |
-| Execution | `EXECUTION_REJECTED`, `EXECUTION_FAILED`, `EXECUTION_RECOVERY_REQUIRED` |
+| Execution | `EXECUTION_REJECTED`, `EXECUTION_FAILED`, `EXECUTION_RECOVERY_REQUIRED`, `EXECUTION_NOT_CANCELLABLE`, `IDEMPOTENCY_KEY_REUSED` |
 | Rate limiting | `RATE_LIMIT_EXCEEDED` |
 | Infrastructure | `SERVICE_UNAVAILABLE`, `INTERNAL_ERROR` |
+
+Recommended execution rejection mapping:
+
+| Status | Error code | Meaning |
+|---|---|---|
+| 401 | `AUTHENTICATION_REQUIRED` | Authentication is missing or invalid |
+| 404 | `RESOURCE_NOT_FOUND` | Resource is missing or not owned by the caller |
+| 409 | `EXECUTION_NOT_CANCELLABLE` | Cancellation is incompatible with the current state |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | Existing UUID was submitted with a different request fingerprint |
+| 422 | `VALIDATION_ERROR` | Invalid input, UUID, target, or SQL request shape |
+| 429 | `CONCURRENCY_LIMIT_REACHED` | Applicable concurrency limit reached |
+| 503 | `SERVICE_UNAVAILABLE` | Required execution service unavailable |
 
 The final error registry will be maintained alongside the implementation.
 
 The frontend should use stable error codes rather than parsing human-readable messages.
 
+A rejected execution request does not create an accepted execution resource.
+
+A conflicting idempotency-key reuse does not modify the original request, its fingerprint, or its execution state.
+
+Existing API-wide error envelope conventions apply to all endpoint-specific errors.
+
 ---
 
-## 16. API Observability
+## 17. API Observability
 
 The backend will record structured operational logs.
 
@@ -1007,12 +1403,18 @@ Logs must not contain:
 - Raw connection credentials.
 - Full SQL statements by default.
 - Sensitive request payloads.
+- HMAC key material.
+- Sensitive canonical request contents.
+
+A request fingerprint may be logged only if operationally justified and safe under the logging policy. It is not required for ordinary request logging.
 
 Operational logs and user-visible query history are separate systems.
 
+The API must not rely on query-history records as its only source of operational execution state because history recording is optional.
+
 ---
 
-## 17. Testing Requirements
+## 18. Testing Requirements
 
 API testing will cover:
 
@@ -1024,19 +1426,49 @@ API testing will cover:
 6. Session expiration and revocation.
 7. Rate-limit enforcement.
 8. Duplicate execution requests.
-9. Concurrent execution limits.
-10. Stale connection configuration updates.
-11. Cancellation and recovery behavior.
-12. Query-history opt-out.
-13. Administrator authorization.
-14. Consistent error responses.
-15. Integration with MySQL.
+9. Matching-fingerprint idempotent retries.
+10. Reuse of an existing UUID with a different fingerprint.
+11. HTTP 409 and `IDEMPOTENCY_KEY_REUSED` for conflicting UUID reuse.
+12. Preservation of the original request after a conflicting reuse.
+13. Prevention of another execution when a UUID is reused with a different payload.
+14. Concurrent submissions using the same UUID and matching payload.
+15. Concurrent submissions using the same UUID and different payloads.
+16. Canonical fingerprint stability when JSON property ordering differs.
+17. Fingerprint changes when target, SQL, or relevant execution options change.
+18. Protection of HMAC key material and fingerprint-generation secrets.
+19. Concurrent execution limits.
+20. Stale connection configuration updates.
+21. Cancellation and recovery behavior.
+22. Query-history opt-out.
+23. Administrator authorization.
+24. Consistent error responses.
+25. Integration with MySQL.
+26. Atomic execution-claim and query-history creation.
+27. Failure to create required query history before execution.
+28. Prevention of external execution when the required transaction rolls back.
+29. Result availability after cache expiry.
+30. Result availability after cache eviction.
+31. Result availability after backend restart.
+32. Correct distinction between restart, expiry, eviction, and generic unavailability.
+33. Prevention of automatic query re-execution when cached results are missing.
+34. Execution lifecycle preservation when result data is unavailable.
+35. Result ownership isolation between authenticated users.
+36. Enforcement of result-cache TTL and capacity limits.
+37. Account-deletion blocking while execution requests remain unresolved.
+38. Preservation of administrative audit records after account deletion.
+39. Correct built-in sample target resolution.
+40. Rejection of client-supplied built-in sample connection credentials or destination overrides.
+41. Query-history retention based on `executed_at`.
+42. Deterministic query-history cursor pagination.
+43. Correct mapping of database `rows_returned` to API `returnedRows`.
+44. Confirmation that `rows_returned` represents the bounded returned result window, not the total matching row count.
+45. Confirmation that `rows_affected` remains independent of `rows_returned` and `returnedRows`.
 
 Automated tests must verify that one user cannot retrieve, modify, or delete another user's resources.
 
 ---
 
-## 18. API Decisions to Validate During Implementation
+## 19. API Decisions to Validate During Implementation
 
 The REST resource structure and major operation boundaries are established as the initial API design.
 
@@ -1050,12 +1482,38 @@ The following details will be finalized during implementation and API contract t
 6. Whether account deletion returns a dedicated operation resource.
 7. Exact error-code registry.
 8. Final cookie and CSRF configuration for the selected deployment topology.
+9. Exact serialization format for execution results and column metadata.
+10. Exact physical representation of cache-generation tracking and bounded tombstone metadata.
+11. Exact canonical serialization procedure for execution-request fingerprint generation.
+12. HMAC algorithm, key provisioning, key-version representation, and rotation procedure.
 
 These details must not contradict the security and lifecycle rules already established.
 
+The following are finalized logical API requirements, not optional implementation choices:
+
+- Execution lifecycle states and transitions.
+- Per-user execution idempotency.
+- Canonical request fingerprinting for accepted execution requests.
+- Same UUID and matching fingerprint means replay of the existing request.
+- Same UUID and different fingerprint means HTTP 409 Conflict with `IDEMPOTENCY_KEY_REUSED`.
+- Original-request preservation during replay.
+- No duplicate execution or query-history record on replay.
+- No execution or query-history record on conflicting UUID reuse.
+- Atomic execution-claim, request-fingerprint, and required query-history creation.
+- Prevention of external execution if the required transaction fails.
+- Result-availability semantics.
+- Cache-generation association for distinguishing backend restart from same-process cache loss.
+- Bounded expiry and eviction metadata.
+- No automatic query re-execution to reconstruct missing results.
+- Execution tracking when query-history recording is disabled.
+- Account-deletion blocking while associated executions remain unresolved.
+- Query-history retention of 90 days from `executed_at`.
+- Mapping of database `rows_returned` to API `returnedRows`.
+- Separation of `rows_returned` from `rows_affected`.
+
 ---
 
-## 19. Related Documents
+## 20. Related Documents
 
 - `01-System-Architecture.md`
 - `02-Component-Design.md`
@@ -1071,37 +1529,12 @@ These details must not contradict the security and lifecycle rules already estab
 
 ---
 
-## 20. Document Maintenance
+## 21. Document Maintenance
 
-This document defines the initial API contract baseline.
+This document defines the consolidated API contract baseline.
 
 Implemented routes, validation schemas, response types, and error codes must remain consistent with this document.
 
 Changes to API behavior must be reflected in this document and relevant technical decision records.
 
-## Audit-approved API contract clarifications
-
-### Built-in sample database target
-
-Execution requests identify their target explicitly (for example, a saved `connectionId` or a system-provided `targetType: "builtin_sample"`). A built-in sample target is resolved only by the backend to its deployment-configured read-only sample connection. Clients cannot submit or override its host, port, username, or password. It is not represented as a user-owned saved connection. The backend still performs authentication, SQL validation, concurrency enforcement, and execution safeguards.
-
-### Bounded result response
-
-The execution-status resource returns the execution lifecycle state and, while available, the bounded result window. Result metadata includes `returnedRows`, `truncated`, and nullable `truncationReason` (`row_limit` or `response_size_limit`). The API does not promise a total row count. Frontend page navigation operates over the returned rows and does not call the execution endpoint again.
-
-### Asynchronous execution contract (AUD-07)
-
-`POST /api/v1/executions` accepts an authenticated request containing a client-generated UUID `executionRequestId`, a target identifier, and the SQL statement. A newly accepted request returns **202 Accepted** with `executionRequestId`, initial state `claimed`, `statusUrl`, `cancelUrl`, and `meta.replayed: false`. Acceptance means the backend has registered the request; it does not mean SQL has completed. Validation, authorization, and concurrency rejections are returned as errors and must not be represented as accepted executions.
-
-The idempotency key is scoped to the authenticated user. Repeating the same UUID returns the existing request and never starts a second execution. A replay returns `meta.replayed: true`; it returns 202 while the request is non-terminal and 200 when terminal. The original accepted request is authoritative: a replay cannot replace its target or SQL. An intentional rerun requires a new UUID.
-
-`GET /api/v1/executions/:executionRequestId` returns 200 for an existing request owned by the caller and reports its current state (`claimed`, `running`, `successful`, `failed`, `cancelled`, or `recovery_required`). It includes bounded result data only when that data remains available in the temporary result cache. The response always reports `resultAvailable`; when false, it reports `resultUnavailableReason` as `expired`, `evicted`, `backend_restart`, or generic `unavailable`. A durable cache-generation identifier distinguishes restart from same-process cache loss; bounded in-memory tombstones distinguish expiry and eviction. The confirmed execution outcome is retained regardless.
-
-`POST /api/v1/executions/:executionRequestId/cancel` acknowledges an accepted cancellation request with 202 while termination is pending. If the execution is already terminal, return 200 with its actual state. The backend must not set `cancelled` until termination is confirmed; uncertain termination is represented as `recovery_required`.
-
-Recommended rejection mapping: 401 `AUTHENTICATION_REQUIRED`; 404 `RESOURCE_NOT_FOUND` for missing or non-owned resources; 409 `EXECUTION_NOT_CANCELLABLE` for an incompatible cancellation state; 422 `VALIDATION_ERROR` for malformed input/UUID/SQL request shape; 429 `CONCURRENCY_LIMIT_REACHED`; and 503 `SERVICE_UNAVAILABLE`. Existing API-wide error envelope conventions apply. A rejected request does not create an accepted execution resource.
-
-### Temporary result availability
-
-The initial MVP uses a bounded process-local in-memory cache for result windows, with a 15-minute default TTL. The cache is not durable and is not a source of execution truth. On expiry, eviction, or backend restart, status polling continues to return the durable execution state with `resultAvailable: false`; it never re-executes SQL automatically. Result cache entries are scoped to both authenticated user and execution-request ID.
-
+The API contract must remain consistent with the Database Design, Authentication and Security, Query Execution Engine, Concurrency and Transactions, and Error Handling and Recovery documents.

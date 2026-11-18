@@ -154,3 +154,34 @@
   border-radius: 4px;
 }
 .themed-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-ql-fg-muted); }
+
+.editor-tabs-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  transform: rotateX(180deg);
+
+  scrollbar-width: thin;
+  scrollbar-color: #353b43 transparent;
+}
+
+.editor-tabs-scroll::-webkit-scrollbar {
+  height: 1px;
+}
+
+.editor-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-tabs-scroll::-webkit-scrollbar-thumb {
+  background: #353b43;
+  border-radius: 10px;
+}
+
+.editor-tabs-scroll::-webkit-scrollbar-thumb:hover {
+  background: #4a515b;
+}
+
+.editor-tabs-scroll > * {
+  transform: rotateX(180deg);
+}

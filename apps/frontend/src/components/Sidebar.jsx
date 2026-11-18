@@ -24,6 +24,7 @@ const Sidebar = () => {
             }`
           }
         >
+          {/* the following passes isActive prop which will determine the current sidebar active tab */}
           {({isActive})=>{
             return <Sidebuttons isActive={isActive} content={content} icon={Icon} />
           }}

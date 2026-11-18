@@ -1,7 +1,8 @@
 import app from "./app.js";
+import { env } from "./config/env.js";
 
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || "127.0.0.1";
+const PORT = env.port;
+const HOST = env.host;
 
 app.listen(PORT, HOST, () => {
   console.log(
