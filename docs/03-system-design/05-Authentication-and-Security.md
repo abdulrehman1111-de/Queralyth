@@ -82,7 +82,8 @@ flowchart TD
     H -->|Yes| J[Generate secure random session token]
     J --> K[Store SHA-256 token hash]
     K --> L[Set secure session cookie]
-    L --> M[Authenticated request]
+    L --> M[Apply account verification restrictions]
+    M --> N[Authenticated request]
 ```
 
 ### 2.3 Session Token Requirements
@@ -93,8 +94,11 @@ flowchart TD
 - Never store the raw session token in the database.
 - Never expose the token in application responses or logs.
 - Transmit it only through the configured secure cookie.
+- Validate the session against its server-side record on authenticated requests.
 
 The database session identifier is separate from the browser's opaque session token.
+
+The backend must not trust a client-supplied session identifier as proof of authentication.
 
 ### 2.4 Session Cookie Configuration
 
@@ -111,6 +115,8 @@ The session cookie must use:
 
 If a cross-site deployment requires `SameSite=None`, the cookie must also use `Secure`, and CSRF protection and CORS restrictions must be configured accordingly.
 
+The cookie's expiration must not extend the lifetime of the corresponding server-side session.
+
 ### 2.5 Session Expiration
 
 Two expiration mechanisms apply:
@@ -120,9 +126,13 @@ Two expiration mechanisms apply:
 
 Activity refreshes the idle expiration only.
 
+The idle expiration must never extend beyond the absolute expiration.
+
 Absolute expiration cannot be extended by continued activity.
 
 All expiration timestamps are calculated and validated by the backend using UTC.
+
+An expired session must be rejected even if the browser continues to send its cookie.
 
 ### 2.6 Multiple Sessions
 
@@ -137,6 +147,8 @@ Users can:
 
 Revoked sessions cannot be reactivated.
 
+Session-management operations must validate ownership. A user cannot revoke another user's session by supplying or guessing its identifier.
+
 ### 2.7 Session Revocation Events
 
 All active sessions are revoked when:
@@ -149,6 +161,40 @@ All active sessions are revoked when:
 A password change requires the user to authenticate again.
 
 The backend checks session validity and account status on authenticated requests.
+
+Session revocation and the associated security-sensitive database changes must be performed transactionally where required.
+
+### 2.8 Unverified Account Sessions
+
+Email verification is required before protected Queralyth functionality becomes available.
+
+An account with valid login credentials, an active account status, and an unverified email address may establish a limited authenticated session.
+
+The limited session allows access only to permitted account-verification functionality, including:
+
+- Retrieving the current verification status.
+- Requesting a new verification email, subject to rate limits.
+- Submitting an email verification token.
+- Accessing other explicitly permitted account-verification operations.
+
+An unverified account cannot access protected product functionality, including:
+
+- Saved database connections.
+- SQL analysis and execution.
+- Query history.
+- Execution requests and results.
+- Other protected user resources.
+- Password-change functionality.
+
+The backend must enforce these restrictions on every protected request.
+
+Frontend navigation restrictions are supplementary and must never replace backend authorization.
+
+Successful email verification changes the email-verification state. It does not change the account's `account_status`.
+
+After successful email verification, the backend may permit normal protected functionality through the existing valid session, subject to the account's other authorization requirements.
+
+The session must still satisfy normal expiration, revocation, account-status, and authorization checks.
 
 ---
 
@@ -179,13 +225,16 @@ The password hash is stored in:
 The password-change workflow requires:
 
 1. An authenticated session.
-2. Verification of the current password.
-3. Validation of the new password.
-4. Generation of a new Argon2id hash.
-5. A transaction that updates the password and revokes all active sessions.
-6. A security notification to the verified email address.
+2. A verified email address.
+3. Verification of the current password.
+4. Validation of the new password.
+5. Generation of a new Argon2id hash.
+6. A transaction that updates the password and revokes all active sessions.
+7. A security notification to the verified email address.
 
 The user must log in again after the change.
+
+An unverified account cannot use the password-change operation through its limited session.
 
 ### 3.4 Login Protection
 
@@ -198,6 +247,8 @@ The login system must implement:
 - Monitoring of suspicious login activity.
 
 Permanent account lockout solely because of repeated failed attempts is not used.
+
+Rate limiting must not reveal whether a particular email address is registered.
 
 ---
 
@@ -234,6 +285,8 @@ A normal user cannot:
 - Bypass account-status restrictions.
 - Retrieve another user's saved credentials.
 
+Unverified users are additionally restricted according to Section 2.8.
+
 ### 4.3 Administrator Permissions
 
 Administrators can perform explicitly authorized administrative operations, including:
@@ -247,6 +300,8 @@ Administrators can perform explicitly authorized administrative operations, incl
 
 Administrator permissions must not automatically grant unrestricted access to saved database passwords or private query contents.
 
+Access to sensitive user data requires a separately authorized and auditable operation where such access is permitted by the product's policies.
+
 ### 4.4 Ownership Enforcement
 
 The backend derives the authenticated user's identity from the validated session.
@@ -256,7 +311,7 @@ It must not trust a client-supplied `userId` as proof of ownership.
 For every user-owned resource:
 
 1. Authenticate the requester.
-2. Retrieve the resource.
+2. Retrieve the resource within the appropriate authorization context.
 3. Validate ownership.
 4. Check the requested operation's permissions.
 5. Perform the operation.
@@ -278,6 +333,8 @@ Where appropriate, requests for nonexistent and inaccessible user-owned resource
 
 This reduces the ability to discover another user's resource identifiers.
 
+Authorization must still be enforced regardless of the response format used to reduce resource enumeration.
+
 ---
 
 ## 5. Account Verification and Status Security
@@ -297,6 +354,12 @@ Verification tokens must:
 
 The raw token must never be stored in the application database or logs.
 
+An unverified user may authenticate through a limited session as described in Section 2.8.
+
+Successful verification must atomically validate and consume the applicable verification token and update the account's verification state.
+
+Email verification does not change `account_status`.
+
 ### 5.2 Email Changes
 
 An email change follows a verification-based workflow.
@@ -305,9 +368,11 @@ An email change follows a verification-based workflow.
 - The proposed address is stored as a pending email.
 - The new address must be verified before becoming the account email.
 - Concurrent requests are serialized through the user record.
-- A notification is sent to the previous verified address after a successful change.
+- A notification is sent to the previous verified address after a successful email change.
 
 Verification messages must not contain passwords or session credentials.
+
+A pending email address must not be treated as the account's verified address.
 
 ### 5.3 Account Status
 
@@ -318,6 +383,10 @@ Supported account statuses:
 - `pending_deletion`
 
 Suspended and pending-deletion accounts cannot perform normal protected operations.
+
+Email verification status is enforced separately from account status.
+
+An account's email-verification state must not be represented by changing its account status.
 
 ### 5.4 Suspension
 
@@ -331,19 +400,27 @@ Account suspension requires:
 
 These database changes occur in the same transaction.
 
+A suspended account cannot use an existing session to bypass the suspension.
+
 ### 5.5 Account Deletion
 
 Account deletion requires:
 
 - An authenticated session.
-- Recent password confirmation.
+- Recent password confirmation where applicable.
 - Explicit final confirmation.
-- Session revocation.
-- Blocking new operations.
+- Blocking new protected operations.
+- Session revocation according to the deletion workflow.
 - Cancellation and resolution of active executions.
 - Controlled permanent deletion.
 
 Permanent deletion must not proceed while an external query may still be running or its termination remains uncertain.
+
+Account deletion must remain blocked until associated execution requests have reached terminal states.
+
+If cancellation or termination cannot be confirmed, the relevant execution must remain tracked in its unresolved state until recovery establishes its outcome.
+
+The deletion workflow must not remove execution state or required execution snapshots while an associated execution remains unresolved.
 
 Administrator audit records are preserved according to their retention policy.
 
@@ -359,6 +436,8 @@ Saved external MySQL passwords are encrypted using:
 
 This provides confidentiality and authentication of encrypted credential data.
 
+Plaintext credentials must not be persisted in application database records.
+
 ### 6.2 Stored Encryption Fields
 
 The `connections` table stores:
@@ -370,6 +449,8 @@ The `connections` table stores:
 
 The encryption key itself is not stored in the application database.
 
+The exact physical representation must remain consistent with the Database Design document.
+
 ### 6.3 Encryption Requirements
 
 - Use a unique nonce for each encryption operation under a given key.
@@ -380,6 +461,7 @@ The encryption key itself is not stored in the application database.
 - Track the encryption-key version.
 - Never reuse a nonce with the same AES-GCM key.
 - Never expose encryption material to the frontend.
+- Treat authentication-tag verification failure as a credential-integrity failure.
 
 ### 6.4 Key Management
 
@@ -413,6 +495,8 @@ Credentials must not appear in:
 
 The backend should decrypt credentials only when an authorized operation requires them.
 
+Decryption must occur within the backend's controlled execution path. Credential material must not be returned to the frontend.
+
 ### 6.6 Passwordless Connections
 
 Passwordless connections are supported.
@@ -420,6 +504,34 @@ Passwordless connections are supported.
 When no password is configured, all encryption-related fields remain NULL.
 
 Empty password input is normalized to a passwordless configuration.
+
+The backend must distinguish a deliberately passwordless configuration from a failed or incomplete encryption operation.
+
+### 6.7 Encryption-Key Rotation
+
+Credential-encryption keys are versioned.
+
+Key rotation must preserve the ability to decrypt credentials encrypted under older supported key versions.
+
+The backend must:
+
+- Identify the key version associated with each encrypted credential.
+- Retain older encryption keys while encrypted credentials still depend on them.
+- Re-encrypt credentials under a newer key when required by the rotation procedure.
+- Verify successful re-encryption before retiring an older key.
+- Never expose encryption-key material through application data or logs.
+
+Encrypted database backups must remain recoverable using the corresponding protected key versions.
+
+### 6.8 Credential Encryption Failure
+
+If credential decryption or authentication-tag verification fails:
+
+- The backend must not attempt to use the unverified credential material.
+- The operation must fail securely.
+- Sensitive ciphertext and key material must not be exposed in the response.
+- A sanitized security event may be recorded.
+- The failure must not silently fall back to plaintext or another unverified credential source.
 
 ---
 
@@ -443,6 +555,10 @@ The connection manager must prevent unauthorized access to:
 
 Validation must consider DNS resolution and address changes, not only the original hostname string.
 
+All resolved destination addresses must be checked against the applicable network restrictions.
+
+The backend must prevent DNS changes between validation and connection establishment from bypassing destination restrictions.
+
 The network layer should enforce destination restrictions as an additional defense.
 
 ### 7.3 Connection Privileges
@@ -450,6 +566,8 @@ The network layer should enforce destination restrictions as an additional defen
 Users should connect using dedicated MySQL accounts with the minimum privileges needed for supported Queralyth operations.
 
 The application must not assume that every user-provided MySQL account is safe.
+
+Database privileges are an additional security boundary and do not replace backend SQL validation.
 
 ### 7.4 Connection Testing
 
@@ -469,6 +587,68 @@ A successful connection test does not guarantee future availability.
 Application database connections and external user-database connections use separate pools.
 
 External database connections must not consume the application database pool.
+
+External connection resources must be released according to the execution lifecycle and must not be released while an external query may still be active.
+
+### 7.6 Connection Configuration Versioning
+
+Every saved connection has a monotonically increasing `configVersion`.
+
+A successful configuration update increments the version.
+
+An execution accepted against a saved connection must be associated with the exact configuration version validated during acceptance.
+
+A later connection update must not silently change the configuration used by an already-accepted execution.
+
+The backend must ensure that the execution worker uses the accepted configuration snapshot rather than retrieving an unrelated newer configuration at execution time.
+
+A stale configuration update must be rejected rather than silently overwriting a newer version.
+
+The version must never wrap or reset.
+
+### 7.7 Execution Configuration Snapshot
+
+When an execution is accepted, the backend must securely bind it to the saved connection's accepted configuration version and the configuration required to execute that request.
+
+For saved-connection executions, the backend must create an immutable, encrypted execution-configuration snapshot associated with the execution request.
+
+The snapshot must:
+
+- Preserve the exact accepted connection configuration.
+- Correspond to one exact `configVersion`.
+- Be associated with the corresponding execution request.
+- Remain independent of subsequent connection edits.
+- Remain usable by an already-accepted execution after the original saved connection is deleted.
+- Be protected against unauthorized access and modification.
+- Store required credential material only in encrypted form.
+- Use AES-256-GCM authenticated encryption for protected credential material.
+- Record the applicable encryption-key version.
+- Never contain plaintext credentials.
+- Never expose credentials or encryption material to the frontend.
+
+The snapshot must be created as part of the execution-acceptance transaction, together with the execution claim, request fingerprint and key-version information, and required query-history record when history recording is enabled.
+
+If snapshot creation or protection fails, the acceptance transaction must roll back. External execution must not begin.
+
+The execution worker must use the accepted immutable snapshot. It must not retrieve the current mutable connection configuration as a replacement.
+
+The snapshot must remain available until its associated execution request becomes eligible for cleanup.
+
+Updating or deleting the original saved connection affects future operations, not the configuration already bound to an accepted execution.
+
+New executions must use the latest valid saved configuration. Deleted connections cannot accept new executions.
+
+For the built-in sample database, the backend resolves the target through deployment-managed configuration. A user-owned saved-connection snapshot is not required.
+
+### 7.8 Snapshot and Credential Key Lifecycle
+
+Execution snapshots and saved connection credentials must remain decryptable for as long as retained execution or connection records depend on their encryption-key versions.
+
+The backend must not retire an encryption key while valid retained records still require it.
+
+Snapshot cleanup must follow execution-request cleanup eligibility, not the lifecycle of the original saved connection.
+
+Deleting or updating a saved connection must not delete or modify an accepted execution snapshot.
 
 ---
 
@@ -543,6 +723,8 @@ Initial concurrency limits:
 | Per saved connection | 2 |
 | Global | Configurable to backend capacity |
 
+Execution limits must be enforced by the backend and execution engine, not merely displayed in the frontend.
+
 ### 8.6 Cancellation
 
 Cancellation is a controlled lifecycle operation.
@@ -550,9 +732,11 @@ Cancellation is a controlled lifecycle operation.
 - Receiving a cancellation request does not mean execution has stopped.
 - The backend signals the execution worker.
 - Termination must be confirmed.
-- Only then may the request become `cancelled`.
+- Only then may a running request become `cancelled`.
 - If termination cannot be confirmed, use `recovery_required`.
 - Resources must not be released while execution may still be active.
+
+A cancellation response must not claim that a query has stopped merely because a cancellation request was accepted.
 
 ### 8.7 Idempotency
 
@@ -565,6 +749,73 @@ Repeated submissions using the same UUID must not initiate another execution.
 An intentional rerun uses a new UUID.
 
 Execution-request tracking remains active even when query-history recording is disabled.
+
+The request fingerprint must be generated and verified consistently so that retries cannot change the target, SQL statement, or other execution-defining inputs.
+
+The same UUID with a different request fingerprint must be rejected as an idempotency-key reuse conflict.
+
+### 8.8 Cancellation Before Worker Start
+
+An execution may be cancelled while its state is `claimed`, before the worker begins external execution.
+
+The following atomic transition rule applies:
+
+- Cancellation may transition `claimed` directly to `cancelled`.
+- The worker may transition `claimed` to `running` only if it successfully acquires the state transition.
+- The worker must not begin external execution before successfully transitioning the request to `running`.
+- If cancellation wins the transition, the worker must not start the query.
+- If the worker wins the transition, cancellation follows the normal running-execution cancellation process.
+
+Only one transition may win.
+
+If cancellation wins while the request is still `claimed`, the backend must establish that external execution never started before releasing reserved resources.
+
+If the worker has already transitioned the request to `running`, the backend must confirm termination before marking it `cancelled`.
+
+If termination cannot be confirmed, the request enters `recovery_required`.
+
+This rule prevents a race in which a cancellation request is accepted but a worker subsequently starts the query anyway.
+
+### 8.9 Execution Request Fingerprints
+
+Execution request fingerprints use a keyed HMAC construction.
+
+Each stored fingerprint is associated with a non-secret key-version identifier.
+
+The `execution_requests` record includes:
+
+`fingerprint_key_version`
+
+This field identifies the HMAC key version used to generate the associated fingerprint. It must never contain key material.
+
+For retries using an existing execution UUID:
+
+1. Retrieve the existing execution request after ownership validation.
+2. Read its stored fingerprint and `fingerprint_key_version`.
+3. Select the corresponding protected backend HMAC key.
+4. Recompute the incoming request fingerprint using that original key version.
+5. Compare the result with the stored fingerprint.
+6. Return the existing execution resource only when the fingerprints match.
+7. Reject a different request using the same UUID.
+
+A retry must not use the currently active HMAC key merely because a newer key has been introduced.
+
+HMAC key rotation must preserve the ability to verify fingerprints for existing execution requests.
+
+Previous HMAC keys must remain securely available for at least as long as retained execution records depend on them.
+
+The backend must not retire an HMAC key while valid retained records still require that key for retry verification.
+
+HMAC key material must never be stored in:
+
+- The application database.
+- Frontend responses.
+- Browser storage.
+- Application logs.
+- Audit details.
+- Analytics events.
+
+The HMAC key lifecycle is separate from the AES credential-encryption key lifecycle.
 
 ---
 
@@ -611,6 +862,8 @@ Validation includes:
 - SQL structure.
 - Pagination parameters.
 - Supported state transitions.
+- Configuration-version values.
+- Execution UUIDs.
 
 ### 9.5 Injection Protection
 
@@ -654,13 +907,17 @@ Automatic SQL redaction is not part of the initial approved design because it ma
 
 ### 10.3 Retention
 
-Query history has a default retention period of 90 days from execution start.
+Query history has a default retention period of 90 days from `executed_at`, representing execution start.
 
 Administrator audit records have a minimum retention of 365 days.
 
 Terminal execution-request records are retained for 24 hours after completion.
 
 Active and unresolved execution requests remain until resolved.
+
+Execution snapshots must remain available for as long as their associated execution requests require them.
+
+Temporary query-result cache entries have a default TTL of 15 minutes and are process-local rather than durable storage.
 
 ### 10.4 User Control
 
@@ -670,11 +927,44 @@ Disabling history affects future records, not existing ones.
 
 Users can delete individual history records.
 
+Execution tracking remains active regardless of the user's query-history recording preference.
+
 ### 10.5 Backups
 
 Deleting a primary database record does not immediately remove every historical backup copy.
 
 Backup retention, expiration, encryption, and access controls must be documented and implemented separately.
+
+### 10.6 History Deletion During Execution
+
+Query-history records and execution requests have independent lifecycles.
+
+A user may delete a history record while its associated execution is still active.
+
+Deleting a history record:
+
+- Must not cancel the associated execution.
+- Must not modify its execution-request state.
+- Must not release execution resources.
+- Must not delete the corresponding execution request.
+- Must not delete the execution's required configuration snapshot.
+- Must not prevent normal execution completion or recovery.
+
+The execution request remains independently tracked until it reaches a terminal state.
+
+The execution request is the authoritative record for execution lifecycle tracking.
+
+If the associated history record no longer exists when execution completes, the backend must handle the missing record gracefully.
+
+A terminal execution update must not fail solely because the history record has been deleted.
+
+The backend must not automatically recreate a history record that the user has deleted.
+
+If a physical relationship associates an execution request with an optional history record, deletion must not cascade-delete the execution request. The association must be cleared or set to NULL as specified by the Database Design.
+
+History ownership must be validated before deletion.
+
+This separation ensures that optional query-history management cannot interfere with execution lifecycle correctness.
 
 ---
 
@@ -733,7 +1023,8 @@ Sensitive configuration must be stored outside source control.
 Examples include:
 
 - Application database credentials.
-- Credential-encryption key.
+- Credential-encryption keys.
+- HMAC fingerprint keys.
 - Session-related secrets.
 - Email-service credentials.
 - Other deployment secrets.
@@ -756,6 +1047,24 @@ Development, testing, and production environments must use separate credentials 
 
 Production data must be sanitized before being used in lower environments.
 
+### 12.4 Cryptographic Key Separation
+
+Credential-encryption keys and HMAC fingerprint keys serve different purposes.
+
+They must be managed as separate secrets with independent versioning and rotation procedures.
+
+A key intended for one cryptographic purpose must not be reused for another.
+
+Key versions are identifiers, not key material, and may be stored with the corresponding encrypted data or fingerprint.
+
+### 12.5 Key Availability and Recovery
+
+Protected backups of cryptographic keys must be maintained separately from application database backups.
+
+Recovery procedures must identify which key versions are required to restore encrypted credentials and verify retained execution fingerprints.
+
+A backup is not considered fully recoverable merely because the database backup itself is intact.
+
 ---
 
 ## 13. Error Handling and Security Logging
@@ -767,6 +1076,7 @@ Error responses must not expose:
 - Passwords.
 - Session tokens.
 - Encryption keys.
+- HMAC keys.
 - Raw connection credentials.
 - Internal database connection strings.
 - Stack traces.
@@ -798,6 +1108,9 @@ Relevant security events should be recorded for controlled investigation, includ
 - Credential-decryption failures.
 - Repeated unauthorized resource access.
 - Suspicious execution activity.
+- Failed or abnormal execution recovery.
+- Fingerprint verification failures.
+- Unexpected execution-state transitions.
 
 Security logs must themselves have restricted access and appropriate retention.
 
@@ -824,6 +1137,10 @@ Examples:
 - Account-status history and audit insertion.
 - Email verification and token consumption.
 - Role change and administrator audit insertion.
+- Execution acceptance and creation of its required protected configuration snapshot.
+- Execution acceptance and creation of the required query-history record when recording is enabled.
+
+External database execution must not begin before the required application-database acceptance transaction commits successfully.
 
 ### 14.3 Encryption Backups
 
@@ -833,6 +1150,70 @@ Encrypted credential backups are not recoverable without the corresponding key v
 
 Key rotation must preserve the ability to decrypt credentials encrypted under older supported key versions until re-encryption or retirement is complete.
 
+### 14.4 Execution Acceptance and Configuration Integrity
+
+Execution acceptance must preserve the association between:
+
+- The execution request.
+- The selected saved connection.
+- The accepted connection configuration version.
+- The required protected execution configuration.
+- The applicable fingerprint and fingerprint-key version.
+
+The backend must establish this association before external query execution begins.
+
+For saved-connection executions, the accepted configuration snapshot is immutable and encrypted.
+
+The execution request must reference the snapshot and must not silently switch to a different saved-connection configuration after acceptance.
+
+The worker must use the accepted snapshot rather than reading the current mutable connection record.
+
+The snapshot must remain available throughout the execution lifecycle, including recovery when execution state is unresolved.
+
+The snapshot must not contain plaintext credentials.
+
+For built-in sample database requests, the backend uses deployment-managed configuration instead of a user-owned saved-connection snapshot.
+
+### 14.5 Execution and History Independence
+
+Execution-request lifecycle updates must not depend on the continued existence of an optional query-history record.
+
+The backend must handle a missing history record without corrupting execution state or incorrectly reporting execution failure.
+
+The execution request remains the authoritative record for execution lifecycle tracking.
+
+History deletion must not cancel execution, release execution resources, or delete its required configuration snapshot.
+
+### 14.6 Fingerprint Integrity
+
+The execution request's stored fingerprint and `fingerprint_key_version` must be maintained as one logical integrity association.
+
+A fingerprint must not be verified using an unrelated key version.
+
+When retrying an existing execution UUID, the backend must use the original stored fingerprint-key version to recompute and verify the incoming request fingerprint.
+
+Key rotation must preserve the availability of the appropriate verification key for every retained execution request.
+
+The fingerprint key version is a non-secret identifier and must never contain key material.
+
+### 14.7 Execution Cancellation and Worker Coordination
+
+The backend must coordinate cancellation and worker startup through atomic execution-state transitions.
+
+The worker must transition an execution from `claimed` to `running` before beginning external query execution.
+
+Cancellation may transition an execution from `claimed` to `cancelled` if it wins the atomic transition.
+
+Only one transition may win.
+
+If cancellation wins, the worker must not execute the query.
+
+If the worker wins, cancellation follows the running-execution termination procedure.
+
+A running execution must not be marked `cancelled` until external termination is confirmed.
+
+Uncertain termination requires `recovery_required` and continued resource tracking.
+
 ---
 
 ## 15. Security Testing Requirements
@@ -840,49 +1221,89 @@ Key rotation must preserve the ability to decrypt credentials encrypted under ol
 Security testing must cover:
 
 ### Authentication
+
 - Invalid credentials.
 - Session expiration.
 - Session revocation.
 - Password-change behavior.
 - Login rate limiting.
 - Email verification.
+- Limited-session restrictions for unverified accounts.
+- Absolute session expiration despite continued activity.
+- Rejection of suspended and pending-deletion accounts.
 
 ### Authorization
+
 - Cross-user resource access.
 - Unauthorized administrator operations.
 - Role escalation attempts.
 - Ownership checks on every resource type.
+- Protected functionality restrictions for unverified accounts.
+- Session ownership and revocation checks.
 
 ### Credential Protection
+
 - Encryption and decryption correctness.
 - Authentication-tag verification.
 - Key-version handling.
 - Passwordless connections.
 - Absence of credentials in API responses and logs.
+- Credential access after connection updates and deletion where an accepted execution still requires the configuration.
+- Snapshot encryption and decryption.
+- Snapshot availability after original connection deletion.
+- Snapshot retention until execution-request cleanup eligibility.
 
 ### SQL Execution
+
 - Multiple-statement rejection.
 - Unsupported statement rejection.
 - Prohibited clause rejection.
 - SQL parser edge cases.
 - Execution limits.
 - Cancellation and recovery behavior.
+- Cancellation racing with the `claimed` to `running` transition.
 - Restricted database privileges.
+- Execution against the accepted connection configuration version.
+- Prevention of worker execution when cancellation wins.
+
+### Idempotency and Fingerprint Security
+
+- Same UUID with an identical request.
+- Same UUID with a different request.
+- Fingerprint key-version selection.
+- HMAC key rotation with retained execution requests.
+- Retry verification using the original stored HMAC key version.
+- Rejection when the required historical key is unavailable.
+- Absence of HMAC key material in the database, API responses, and logs.
+
+### History and Execution Independence
+
+- Deleting history during an active execution.
+- Execution completion after history deletion.
+- Recovery after history deletion.
+- Ensuring deleted history is not recreated.
+- Ensuring history deletion does not cancel execution.
+- Ensuring history deletion does not remove execution snapshots.
+- Handling a missing optional history association.
 
 ### Network Security
+
 - Malformed destination rejection.
 - Restricted address rejection.
 - DNS resolution changes.
 - Internal network destination restrictions.
 - Connection timeout handling.
+- Enforcement of destination restrictions at connection time.
 
 ### Application Security
+
 - CSRF protection.
 - CORS restrictions.
 - Input validation.
 - Injection resistance.
 - Rate limiting.
 - Secure error handling.
+- Security-header configuration.
 
 Security tests must include both automated tests and targeted manual verification.
 
@@ -899,13 +1320,21 @@ The following are part of the initial design:
 - Secure cookies.
 - CSRF protection.
 - Role and ownership authorization.
+- Limited sessions for unverified accounts.
 - AES-256-GCM credential encryption.
+- Encrypted immutable execution-configuration snapshots.
 - Separate encryption-key storage.
+- Versioned HMAC request fingerprints.
+- Original-key-version retry verification.
+- Separate cryptographic key management by purpose.
 - Backend SQL allowlisting.
 - Least-privilege external database credentials.
 - SSRF and destination restrictions.
 - Query and result limits.
 - Execution idempotency and cancellation.
+- Atomic cancellation handling before worker start.
+- Immutable execution configuration association.
+- Independent history and execution lifecycles.
 - Secure logging.
 - Account and audit retention policies.
 
@@ -948,7 +1377,17 @@ Security-related implementation changes must remain consistent with these requir
 
 Any changes to approved security decisions must be documented in the relevant technical decision records.
 
-## Audit-approved temporary result confidentiality
+### 18.1 Audit-Approved Temporary Result Confidentiality
 
-Temporary query-result cache entries may contain user database data and must be treated as confidential. Cache entries are keyed by authenticated user ID and execution-request ID; every retrieval performs normal authentication and ownership authorization. Result contents must not appear in logs, analytics, error messages, or another user's response. Entries expire after the 15-minute default TTL and are removed on eviction or process restart. The cache is process-local and is not durable storage.
+Temporary query-result cache entries may contain user database data and must be treated as confidential.
+
+Cache entries are keyed by authenticated user ID and execution-request ID; every retrieval performs normal authentication and ownership authorization.
+
+Result contents must not appear in logs, analytics, error messages, or another user's response.
+
+Entries expire after the 15-minute default TTL and are removed on eviction or process restart.
+
+The cache is process-local and is not durable storage.
+
+The backend must not treat possession of an execution-request ID as authorization to retrieve cached results.
 

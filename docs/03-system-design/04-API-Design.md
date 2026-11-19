@@ -29,6 +29,10 @@ It establishes:
 - Pagination and filtering conventions.
 - API security requirements.
 - Temporary query-result availability behavior.
+- Execution idempotency and fingerprint-version handling.
+- Immutable saved-connection configuration snapshots.
+- Execution cancellation and recovery coordination.
+- Independence of execution lifecycle from optional query history.
 
 ### 1.2 API Architecture
 
@@ -46,7 +50,8 @@ The backend is responsible for:
 6. Coordinating the query engine.
 7. Communicating with external MySQL databases when authorized.
 8. Managing execution lifecycle and recovery.
-9. Returning structured responses.
+9. Preserving accepted execution configuration.
+10. Returning structured responses.
 
 The frontend never connects directly to the application database or external MySQL databases.
 
@@ -108,6 +113,7 @@ Example response:
       "host": "db.example.com",
       "port": 3306,
       "databaseName": "application",
+      "configVersion": "3",
       "lastTestStatus": "successful"
     }
   ]
@@ -115,6 +121,8 @@ Example response:
 ```
 
 Sensitive connection credentials are never included in responses.
+
+`configVersion` is serialized as a string to avoid JavaScript integer precision problems.
 
 ### 2.4 Common Response Structure
 
@@ -157,6 +165,7 @@ Error details must not expose:
 - Sensitive infrastructure details.
 - Unnecessary SQL or internal stack traces.
 - HMAC key material or other fingerprint-generation secrets.
+- Immutable snapshot credential material.
 
 ---
 
@@ -193,6 +202,8 @@ Expected behavior:
 
 The account remains unverified until the verification process succeeds.
 
+Registration does not grant access to protected product functionality.
+
 ### 3.2 Login
 
 **Endpoint:** `POST /api/v1/auth/login`
@@ -220,6 +231,32 @@ Expected behavior:
 
 Generic authentication errors must not reveal whether an email address is registered.
 
+#### Unverified account behavior
+
+A user whose email is not yet verified may establish an authenticated session after successful login.
+
+This session is a limited authenticated session.
+
+The user may access only verification and account-related functionality explicitly permitted for unverified accounts.
+
+The user must not access protected product functionality, including:
+
+- Saved database connections.
+- Protected SQL analysis operations.
+- Query execution.
+- Execution results.
+- Query history.
+- Protected workspace resources.
+- Administrative functionality.
+
+The backend must enforce these restrictions on every protected request.
+
+Frontend navigation restrictions alone are insufficient.
+
+Email verification does not change the user's account status. An unverified user may still have `accountStatus: "active"`.
+
+Normal protected functionality becomes available only after successful verification, provided the account is otherwise active and authorized.
+
 ### 3.3 Logout
 
 **Endpoint:** `POST /api/v1/auth/logout`
@@ -233,13 +270,17 @@ Expected behavior:
 - Clear the browser session cookie.
 - Return a successful response.
 
+Logout must work for both fully verified and limited authenticated sessions.
+
 ### 3.4 Current Session
 
 **Endpoint:** `GET /api/v1/auth/session`
 
 Purpose: Retrieves the current authentication state.
 
-Example response:
+This endpoint is available to both verified and unverified authenticated users.
+
+Example response for a verified account:
 
 ```json
 {
@@ -249,13 +290,36 @@ Example response:
       "userId": "104",
       "email": "user@example.com",
       "emailVerified": true,
+      "accountStatus": "active",
       "role": "user"
     }
   }
 }
 ```
 
+Example response for an unverified account:
+
+```json
+{
+  "data": {
+    "authenticated": true,
+    "user": {
+      "userId": "105",
+      "email": "user@example.com",
+      "emailVerified": false,
+      "accountStatus": "active",
+      "role": "user"
+    },
+    "accessLevel": "verification_only"
+  }
+}
+```
+
+The `accessLevel` property communicates the current access restriction.
+
 No password hashes, raw tokens, or private credential information are returned.
+
+The backend remains responsible for enforcing the actual access restrictions.
 
 ### 3.5 Password Change
 
@@ -266,11 +330,14 @@ Purpose: Changes the authenticated user's password.
 Expected behavior:
 
 - Require current-password verification.
+- Require an eligible authenticated account.
 - Validate the new password.
 - Generate a new Argon2id hash.
 - Update the password and revoke all active sessions transactionally.
 - Require the user to log in again.
 - Send a security notification to the verified email address.
+
+An unverified account cannot use protected account-management functionality through this endpoint.
 
 ### 3.6 Email Verification
 
@@ -286,11 +353,18 @@ Example request:
 
 Expected behavior:
 
+- Accept a valid registration-verification token.
 - Validate the token hash.
 - Verify its purpose and expiry.
 - Enforce single-use behavior.
 - Update the account verification timestamp.
 - Mark the token as used transactionally.
+
+This endpoint must be accessible to an unverified authenticated session.
+
+The backend must not require email verification before allowing the operation that establishes email verification.
+
+After successful verification, the backend may return the updated session/account state.
 
 ### 3.7 Resend Verification Email
 
@@ -298,7 +372,20 @@ Expected behavior:
 
 Purpose: Requests another registration verification email.
 
+This endpoint is accessible to an eligible unverified authenticated session.
+
+Expected behavior:
+
+- Identify the authenticated user.
+- Check current verification status.
+- Apply resend rate limits.
+- Invalidate the previous unused registration-verification token when issuing a replacement.
+- Create a new single-use token.
+- Initiate email delivery.
+
 Rate limits and generic responses must prevent email enumeration and abuse.
+
+The endpoint must not allow an already verified account to create unnecessary registration-verification tokens.
 
 ---
 
@@ -310,11 +397,19 @@ Base path:
 
 All endpoints require authentication unless explicitly stated otherwise.
 
+Protected account operations require a verified account.
+
+Verification-related operations remain available through the authentication endpoints described in Section 3.
+
 ### 4.1 Retrieve Account
 
 **Endpoint:** `GET /api/v1/account`
 
 Returns the authenticated user's account information and relevant preferences.
+
+This endpoint requires a verified account because it belongs to the protected account-management API.
+
+The current-session endpoint remains available for unverified users who need their authentication and verification status.
 
 ### 4.2 Update Account Preferences
 
@@ -332,6 +427,8 @@ Purpose: Updates account-level preferences.
 
 The backend validates each supported preference and applies ownership automatically through the authenticated session.
 
+Requires a verified and otherwise eligible account.
+
 ### 4.3 Request Email Change
 
 **Endpoint:** `POST /api/v1/account/email-change`
@@ -348,6 +445,8 @@ Example request:
 
 The existing verified email remains active until the proposed address is verified.
 
+Requires a verified account and appropriate reauthentication where required by the security policy.
+
 ### 4.4 Confirm Email Change
 
 **Endpoint:** `POST /api/v1/account/email-change/confirm`
@@ -361,6 +460,8 @@ Example request:
 ```
 
 The backend validates the token and updates the email transactionally.
+
+Registration verification and email-change verification are separate token purposes and must not be interchangeable.
 
 ### 4.5 Delete Account
 
@@ -406,6 +507,8 @@ Base path:
 
 `/api/v1/sessions`
 
+Session-management endpoints require authentication and a verified account.
+
 ### 5.1 List Sessions
 
 **Endpoint:** `GET /api/v1/sessions`
@@ -438,6 +541,8 @@ Base path:
 
 All connection resources are user-owned.
 
+All connection endpoints require a verified, authenticated account.
+
 ### 6.1 List Connections
 
 **Endpoint:** `GET /api/v1/connections`
@@ -445,6 +550,8 @@ All connection resources are user-owned.
 Returns saved connection metadata.
 
 Passwords and encrypted credential material are never returned.
+
+The response includes the current `configVersion` for each connection.
 
 ### 6.2 Create Connection
 
@@ -484,6 +591,8 @@ Saving a connection does not automatically establish that it works.
 
 Returns connection metadata for the specified user-owned connection.
 
+Credentials and encrypted credential material must never be returned.
+
 ### 6.4 Update Connection
 
 **Endpoint:** `PATCH /api/v1/connections/:connectionId`
@@ -498,7 +607,7 @@ Example request:
   "databaseName": "application",
   "username": "app_user",
   "password": "new-password",
-  "configVersion": 2
+  "configVersion": "2"
 }
 ```
 
@@ -518,19 +627,43 @@ Expected behavior:
 
 The database representation is `BIGINT UNSIGNED NOT NULL DEFAULT 1`.
 
+#### Interaction with accepted executions
+
+A connection update affects the current saved connection configuration only.
+
+It must not modify an immutable configuration snapshot already associated with an accepted execution.
+
+An execution accepted against configuration version 2 must continue to use that accepted version even if the user later updates the saved connection to version 3.
+
+A new execution must validate and capture the latest valid saved-connection configuration.
+
 ### 6.5 Delete Connection
 
 **Endpoint:** `DELETE /api/v1/connections/:connectionId`
 
 Requires explicit user confirmation through the frontend workflow.
 
-The backend permanently deletes the connection configuration and encrypted credentials.
+The backend permanently deletes the connection's current configuration and encrypted credentials.
 
 Historical query records remain preserved.
 
 The associated `query_history.connection_id` is set to NULL, while the connection-name snapshot remains available.
 
-An execution that has already acquired the required resources may complete under the execution lifecycle rules. Deletion prevents new operations from using the deleted connection.
+#### Interaction with accepted executions
+
+Deleting a saved connection prevents new operations from using that connection.
+
+However, deletion must not invalidate an already accepted execution.
+
+When an execution is accepted, the backend preserves the exact saved-connection configuration in an immutable, encrypted execution-configuration snapshot.
+
+The snapshot is independent of the original connection row.
+
+An accepted execution may continue, be cancelled, or be recovered using its snapshot even after the original saved connection is deleted.
+
+The snapshot must remain available until the associated execution request is eligible for cleanup.
+
+Deleting the connection must not delete its accepted execution snapshots.
 
 ### 6.6 Test Connection
 
@@ -541,7 +674,7 @@ Purpose: Tests connectivity and authentication for a saved connection.
 Expected behavior:
 
 1. Validate ownership.
-2. Capture the current configuration version.
+2. Capture and validate the current configuration version.
 3. Acquire the required credentials.
 4. Attempt a connection.
 5. Apply a 10-second connection-establishment timeout.
@@ -550,6 +683,8 @@ Expected behavior:
 
 A stale test result must not overwrite a newer configuration's status.
 
+Connection testing is not an execution request and does not create a query-history record.
+
 ---
 
 ## 7. SQL Analysis API
@@ -557,6 +692,8 @@ A stale test result must not overwrite a newer configuration's status.
 Base path:
 
 `/api/v1/analysis`
+
+All analysis endpoints require a verified authenticated account.
 
 These endpoints perform analysis without executing the submitted SQL as a normal query-execution request.
 
@@ -645,6 +782,8 @@ Base path:
 
 This API coordinates actual query execution through the backend query engine.
 
+All execution endpoints require a verified, authenticated account.
+
 ### 8.1 Start Execution
 
 **Endpoint:** `POST /api/v1/executions`
@@ -696,48 +835,107 @@ The fingerprint covers all input that determines the meaning of the execution re
 
 The canonicalization process must be deterministic: semantically identical request payloads represented with different JSON property ordering must produce the same canonical representation and fingerprint.
 
-The backend generates the fingerprint using a secure keyed cryptographic HMAC. HMAC key material remains exclusively in backend-controlled secret configuration and must never be returned to the frontend, stored in the application database, or included in logs.
+The backend generates the fingerprint using a secure keyed cryptographic HMAC.
+
+The HMAC key material remains exclusively in backend-controlled secret configuration.
+
+The application database stores:
+
+- The generated request fingerprint.
+- The non-secret `fingerprintKeyVersion` identifier associated with that fingerprint.
+
+The `fingerprintKeyVersion` identifies which backend-held HMAC key version generated the stored fingerprint.
+
+It is not the key itself and must never contain key material.
+
+HMAC key material must never be returned to the frontend, stored in the application database, or included in logs.
 
 The database stores the fingerprint, not the original SQL statement in `execution_requests`. The original SQL may separately be stored in `query_history` when the user's history preference permits it.
 
 The fingerprint is bound to the authenticated user's execution-request UUID through the corresponding `execution_requests` record. It is not an authentication credential or a replacement for authorization.
 
-The fingerprint must be calculated from validated, canonical request data before an existing request is classified as a matching replay or a conflicting reuse.
+#### Fingerprint key rotation
+
+The backend supports HMAC key rotation using versioned keys.
+
+Rules:
+
+- New execution requests use the currently active HMAC key version.
+- New request fingerprints are stored with their corresponding `fingerprintKeyVersion`.
+- A retry of an existing request must use the original request's stored key version.
+- The backend must retain access to old HMAC key versions while retained execution requests still depend on them.
+- Active, unresolved, and retained terminal requests must remain verifiable.
+- Old keys must not be retired merely because a newer key has become active.
+- Key retirement requires verifying that no retained execution request depends on the retiring key version.
+
+The frontend never chooses the fingerprint key version.
+
+The backend never accepts a client-supplied fingerprint or key version as authoritative.
 
 #### Expected backend workflow
 
 1. Authenticate the user.
-2. Validate the request structure and `executionRequestId` UUID.
-3. Check account status and permissions.
-4. Validate and canonicalize the execution request.
-5. Generate its request fingerprint using the backend-held HMAC key.
+2. Verify the account is eligible for protected execution functionality, including email verification.
+3. Validate the request structure and `executionRequestId` UUID.
+4. Check account status and permissions.
+5. Validate and canonicalize the execution request.
 6. Look up an existing request using the authenticated user and `executionRequestId`.
-7. If an existing request has a matching fingerprint, return the existing execution resource as an idempotent replay without starting another execution.
-8. If an existing request has a different fingerprint, reject the request with HTTP 409 Conflict. Do not modify the original request, start another execution, or create another query-history record.
-9. If no existing request exists, validate the selected target and, for a saved connection, verify ownership.
-10. Parse and validate the SQL against the supported allowlist before accepting the operation.
-11. Begin an application-database transaction.
-12. Atomically register the execution claim, persist its fingerprint, and enforce the applicable concurrency limits.
-13. If query-history recording is enabled, create the corresponding `running` query-history record in the same transaction.
-14. Commit the transaction before beginning external query execution.
-15. If claim creation, fingerprint persistence, or required query-history creation fails, roll back the transaction. Do not start external execution.
-16. Execute through the query engine outside the application-database transaction.
-17. Record the terminal execution state and update the associated query-history record when one exists.
-18. Return the appropriate execution information.
+7. If an existing request is found:
+   - Read its stored `fingerprintKeyVersion`.
+   - Retrieve the corresponding backend-held HMAC key version.
+   - Generate the retry fingerprint using that original key version.
+   - Compare it with the stored fingerprint.
+   - If the fingerprints match, return the existing execution resource as an idempotent replay without starting another execution.
+   - If the fingerprints differ, reject the request with HTTP 409 Conflict.
+8. If no existing request exists:
+   - Use the currently active HMAC key version.
+   - Generate the new request fingerprint.
+   - Validate the selected target.
+   - For a saved connection, validate ownership and current configuration.
+9. Parse and validate the SQL against the supported allowlist before accepting the operation.
+10. Begin an application-database transaction.
+11. For a saved-connection target, lock and revalidate the selected connection row.
+12. Capture the exact accepted connection configuration and its current `configVersion`.
+13. Create an immutable, encrypted execution-configuration snapshot associated with the execution request.
+14. Atomically register the execution claim, persist its fingerprint and `fingerprintKeyVersion`, and enforce the applicable concurrency limits.
+15. If query-history recording is enabled, create the corresponding `running` query-history record in the same transaction.
+16. Commit the transaction before beginning external query execution.
+17. The worker must atomically transition the request from `claimed` to `running`.
+18. Only after successfully winning that transition may the worker begin external query execution.
+19. Execute through the query engine outside the application-database transaction, using the accepted immutable configuration snapshot.
+20. Record the terminal execution state and update the associated query-history record when one still exists.
+21. Return the appropriate execution information.
 
-The execution claim, request fingerprint, and required query-history record must be created atomically when history recording is enabled.
+The execution claim, request fingerprint, key-version identifier, required configuration snapshot, and required query-history record must be created atomically when applicable.
+
+For built-in sample database requests, no user-owned saved-connection snapshot is required. The backend resolves the built-in target through its deployment-managed configuration.
 
 If history recording is disabled, execution-request tracking and lifecycle management remain active without creating a query-history record.
 
-The history preference is evaluated when the execution is accepted. If history was enabled at that point, its record remains associated with the attempt even if the preference changes while execution is running.
+The history preference is evaluated when the execution is accepted. If history was enabled at that point, its record remains associated with that attempt even if the preference changes while execution is running.
 
-Duplicate requests with the same UUID and matching fingerprint must not initiate another execution or create another query-history record.
-
-Reusing a UUID with a different fingerprint is a conflict, not a new execution and not a valid replay.
-
-An intentional rerun must use a new UUID.
+If claim creation, fingerprint persistence, snapshot creation, or required query-history creation fails, roll back the transaction. Do not start external execution.
 
 A failure to persist the terminal outcome must be handled through the execution recovery mechanism. The backend must not falsely report a confirmed successful or failed outcome when the actual outcome is uncertain.
+
+#### Connection snapshot consistency
+
+For a saved-connection execution:
+
+- The backend must validate the connection belongs to the authenticated user.
+- The backend must lock the connection while capturing its configuration.
+- The captured configuration must correspond to one exact `configVersion`.
+- The execution request must reference the immutable snapshot.
+- The snapshot must include the accepted connection details and encrypted credential material where applicable.
+- The snapshot must not contain plaintext credentials.
+- The snapshot must remain independent of later updates or deletion of the saved connection.
+- The worker must use the accepted snapshot rather than reading the current mutable connection row again.
+
+The connection's `configVersion` and the snapshot must represent the same accepted configuration.
+
+A new execution must use the latest valid connection configuration at its own acceptance time.
+
+A retry of an existing execution request must not silently switch to a newer configuration version.
 
 #### Acceptance response
 
@@ -761,7 +959,7 @@ A duplicate request with the same UUID and matching fingerprint returns the same
 
 Active requests return 202 and terminal requests return 200.
 
-A replay never changes the original accepted target, SQL, or relevant execution options.
+A replay never changes the original accepted target, SQL, relevant execution options, configuration snapshot, or fingerprint key version.
 
 A UUID reuse conflict returns HTTP 409 Conflict:
 
@@ -776,16 +974,15 @@ A UUID reuse conflict returns HTTP 409 Conflict:
 
 The conflicting request does not change the original execution resource and does not initiate another execution.
 
-Validation, authorization, and concurrency rejections are returned as errors. A rejected request must not be represented as an accepted execution.
-
 #### Idempotency behavior
 
 - The idempotency key is scoped to the authenticated user.
 - The logical uniqueness rule is `(user_id, execution_request_id)`.
 - A request fingerprint is generated from the canonical target, SQL, and relevant execution options.
 - Repeating the same UUID with the same fingerprint returns the existing execution resource.
+- An existing request is verified using its original stored `fingerprintKeyVersion`.
 - Reusing the same UUID with a different fingerprint returns HTTP 409 Conflict with error code `IDEMPOTENCY_KEY_REUSED`.
-- A conflicting reuse must not overwrite the original fingerprint or accepted request details.
+- A conflicting reuse must not overwrite the original fingerprint, key version, accepted request details, or configuration snapshot.
 - A replay must not initiate another execution.
 - A replay must not create another query-history record.
 - A conflicting reuse must not initiate an execution or create another query-history record.
@@ -902,13 +1099,71 @@ Purpose: Requests cancellation of an active execution.
 
 Cancellation is not considered successful merely because the request was received.
 
-Return 202 Accepted while termination is pending.
+The backend must distinguish between a request that has not yet started external execution and one that is already running.
+
+#### Cancellation before external execution
+
+A request in `claimed` state has been accepted but has not yet won the worker-start transition.
+
+The backend may atomically transition:
+
+`claimed` → `cancelled`
+
+The cancellation operation must use a conditional state transition or equivalent row-locking mechanism.
+
+If the transition succeeds:
+
+- The execution is considered cancelled before external execution began.
+- The worker must not start the external query.
+- The request is terminal.
+- Resources may be released once the transition guarantees no worker can start the request.
+- The associated query-history record, if it still exists, is updated to `cancelled`.
+
+If the worker has already successfully transitioned the request to `running`, the claimed-state cancellation operation must not succeed.
+
+#### Cancellation during external execution
+
+A request in `running` state follows the normal external cancellation process.
+
+Expected behavior:
+
+1. Request cancellation from the query-execution worker.
+2. Attempt to terminate the external query through the supported driver/database mechanism.
+3. Confirm external termination.
+4. Record `cancelled` only after termination is confirmed.
+5. Update the associated query-history record if it still exists.
+
+If external termination cannot be confirmed, the execution must remain unresolved or enter `recovery_required`.
+
+Resources must not be released merely because a cancellation request was received.
+
+#### Cancellation and worker-start race
+
+The cancellation operation and worker-start operation compete for the same execution state.
+
+The worker must atomically transition:
+
+`claimed` → `running`
+
+before starting external execution.
+
+The cancellation operation must atomically transition:
+
+`claimed` → `cancelled`
+
+Only one conditional transition may win.
+
+- If cancellation wins, the worker must not execute the query.
+- If the worker wins, cancellation must follow the running-execution cancellation process.
+- A worker must not start an external query based only on an earlier read showing `claimed`.
+- A worker must verify that its conditional transition to `running` succeeded.
+- A cancelled request must never be started by a worker.
+
+Return 202 Accepted while running-execution termination is pending.
 
 If the request is already terminal, return 200 with its actual state.
 
-The backend must confirm actual termination before setting the execution state to `cancelled`.
-
-If termination cannot be confirmed, the execution may enter `recovery_required`.
+If cancellation cannot be performed because of the current state, return the appropriate conflict response without modifying the execution outcome.
 
 An expired execution lease does not independently prove that the external database query has stopped.
 
@@ -1032,7 +1287,7 @@ Base path:
 
 `/api/v1/history`
 
-All operations are scoped to the authenticated user.
+All operations require a verified authenticated account and are scoped to the authenticated user.
 
 ### 10.1 List History
 
@@ -1052,14 +1307,14 @@ Default page size: 20.
 
 Maximum page size: 100.
 
-Ordering: newest first, using `executedAt` and `historyId` for deterministic cursor pagination.
+Ordering: newest first, using `acceptedAt` and `historyId` for deterministic cursor pagination.
 
 For built-in sample database executions:
 
 - `connectionId` is NULL.
 - The connection-name snapshot is `Built-in Sample Database`.
 
-History records are retained for 90 days from `executedAt`, subject to the separate backup-retention policy.
+History records are retained for 90 days from `acceptedAt`, subject to the separate backup-retention policy.
 
 ### 10.2 Retrieve History Record
 
@@ -1086,6 +1341,35 @@ When result data is unavailable, the history record must retain its recorded met
 **Endpoint:** `DELETE /api/v1/history/:historyId`
 
 Deletes one history record belonging to the authenticated user.
+
+The backend must validate ownership before deletion.
+
+#### Independence from execution lifecycle
+
+Query history is optional user-facing metadata. It is not the source of truth for operational execution state.
+
+Deleting a history record must not:
+
+- Cancel its associated execution.
+- Change the execution state.
+- Modify the execution request fingerprint.
+- Remove the execution request.
+- Delete an execution-configuration snapshot.
+- Trigger external query termination.
+- Prevent execution recovery.
+- Recreate the deleted history record later.
+
+An execution may still be `claimed`, `running`, or `recovery_required` when its associated history record is deleted.
+
+The execution request remains independently available for status retrieval, idempotency, cancellation, and recovery.
+
+If the execution request maintains an optional association with the history record, deleting the history row must clear that association rather than delete the execution request.
+
+Execution completion and recovery must tolerate the absence of the history row.
+
+If the history row no longer exists, the backend updates the execution request only.
+
+A deleted history record must never be recreated automatically.
 
 ### 10.4 History Recording Preference
 
@@ -1175,7 +1459,7 @@ The API will use standard HTTP status codes consistently.
 | 204 | No Content | Successful deletion without response body |
 | 400 | Bad Request | Malformed request |
 | 401 | Unauthorized | Missing or invalid authentication |
-| 403 | Forbidden | Authenticated but not authorized |
+| 403 | Forbidden | Authenticated but not authorized, including an unverified account attempting protected functionality |
 | 404 | Not Found | Resource unavailable or not visible to caller |
 | 409 | Conflict | Stale configuration, idempotency-key reuse with a different payload, or conflicting operation |
 | 413 | Content Too Large | Request exceeds permitted size |
@@ -1214,8 +1498,12 @@ Validation includes:
 - Request size limits.
 - Execution idempotency identifiers.
 - Canonical execution-request fingerprint generation.
+- Fingerprint key-version selection.
 - Target-object structure.
 - Relevant execution-option validation.
+- Saved-connection configuration-version consistency.
+- Account verification state.
+- Execution state-transition validity.
 
 ### 13.2 Authentication
 
@@ -1226,6 +1514,12 @@ Validation includes:
 - Session expiry enforcement.
 - Session revocation.
 - Account-status checks.
+- Email-verification checks for protected functionality.
+- Limited authenticated sessions for unverified accounts.
+
+Authentication and authorization are separate decisions.
+
+A valid session does not automatically grant access to every API endpoint.
 
 ### 13.3 Authorization
 
@@ -1234,6 +1528,10 @@ Every user-owned resource must be checked against the authenticated user.
 The backend must never trust a client-supplied `userId` as proof of ownership.
 
 Administrator endpoints require separate role-based authorization.
+
+Protected product functionality requires a verified account.
+
+Unverified users may access only explicitly permitted verification and account-related endpoints.
 
 ### 13.4 CSRF and CORS
 
@@ -1264,7 +1562,33 @@ The built-in sample database must be resolved exclusively by the backend to its 
 
 Clients cannot override its host, port, database name, username, or credentials.
 
-### 13.6 Rate Limiting
+### 13.6 Connection Snapshot Protection
+
+For accepted saved-connection executions:
+
+- Capture the exact configuration version validated at acceptance.
+- Store the snapshot independently of the mutable saved connection.
+- Encrypt credential material using AES-256-GCM.
+- Never store plaintext passwords in the snapshot.
+- Keep encryption keys outside the database and source repository.
+- Restrict decryption to authorized backend execution code.
+- Never return snapshot contents or credentials to the frontend.
+- Never include credentials, ciphertext, encryption keys, or authentication tags in logs.
+- Preserve old credential-encryption key versions while retained snapshots depend on them.
+- Do not allow a connection update or deletion to modify an accepted snapshot.
+
+### 13.7 Request Fingerprint Protection
+
+- Generate fingerprints only in the backend.
+- Use a secure keyed HMAC.
+- Store the non-secret key-version identifier with the fingerprint.
+- Keep HMAC key material outside the database.
+- Use the original stored key version when verifying retries.
+- Keep old keys available while retained requests depend on them.
+- Do not accept a frontend-supplied fingerprint or key version as authoritative.
+- Never expose HMAC key material through errors, API responses, or logs.
+
+### 13.8 Rate Limiting
 
 Apply rate limits to sensitive operations, including:
 
@@ -1288,7 +1612,7 @@ For query history, cursor-based pagination is the selected strategy.
 
 History ordering uses:
 
-`(executed_at, history_id) DESC`
+`(accepted_at, history_id) DESC`
 
 This avoids relying solely on timestamps when multiple records share the same timestamp.
 
@@ -1333,9 +1657,59 @@ An expired execution lease does not independently prove that an external databas
 
 The backend must use its execution recovery process to establish the actual outcome before treating an uncertain execution as terminal.
 
-Cancellation is terminal only after external termination has been confirmed. If termination remains uncertain, the execution must remain unresolved or enter `recovery_required`.
+### 15.1 Execution startup
+
+An accepted execution initially enters `claimed`.
+
+Before beginning external execution, a worker must atomically transition:
+
+`claimed` → `running`
+
+Only the worker that successfully performs this transition may start the external query.
+
+A previous read of the `claimed` state is insufficient.
+
+### 15.2 Cancellation
+
+A cancellation request may atomically transition a request from:
+
+`claimed` → `cancelled`
+
+This is permitted only when the worker has not already won the transition to `running`.
+
+Cancellation and worker startup must use coordinated conditional state transitions so that only one can win.
+
+If cancellation wins, the worker must not start external execution.
+
+If worker startup wins, cancellation follows the running-execution termination process.
+
+A running execution is terminally cancelled only after external termination has been confirmed.
+
+If termination is uncertain, the request must remain unresolved or enter `recovery_required`.
+
+### 15.3 Recovery
+
+The backend must distinguish a genuinely terminated external query from an execution whose status is merely unknown.
+
+Recovery may reconcile a `recovery_required` request to `successful`, `failed`, or `cancelled` only after sufficient evidence establishes the actual outcome.
+
+An expired lease, missing heartbeat, worker crash, or lost connection is not sufficient proof of external termination.
+
+### 15.4 Query-history independence
+
+Execution lifecycle is independent of query history.
+
+Deleting a query-history record does not cancel or modify an associated execution.
+
+Completion, cancellation, and recovery must tolerate a missing history record.
+
+A deleted history record must not be recreated automatically.
+
+### 15.5 Account deletion
 
 The account-deletion coordinator must block permanent deletion while any associated execution request remains in `claimed`, `running`, or `recovery_required`.
+
+An execution's immutable saved-connection snapshot must remain available while the execution is active or unresolved.
 
 ---
 
@@ -1347,7 +1721,7 @@ Initial error-code categories include:
 
 | Category | Example codes |
 |---|---|
-| Authentication | `AUTHENTICATION_REQUIRED`, `INVALID_CREDENTIALS` |
+| Authentication | `AUTHENTICATION_REQUIRED`, `INVALID_CREDENTIALS`, `EMAIL_VERIFICATION_REQUIRED` |
 | Authorization | `FORBIDDEN`, `RESOURCE_NOT_FOUND` |
 | Validation | `VALIDATION_ERROR`, `INVALID_REQUEST` |
 | Connections | `CONNECTION_NOT_FOUND`, `CONNECTION_TEST_FAILED` |
@@ -1361,6 +1735,7 @@ Recommended execution rejection mapping:
 | Status | Error code | Meaning |
 |---|---|---|
 | 401 | `AUTHENTICATION_REQUIRED` | Authentication is missing or invalid |
+| 403 | `EMAIL_VERIFICATION_REQUIRED` | Account is authenticated but email verification is required for the requested operation |
 | 404 | `RESOURCE_NOT_FOUND` | Resource is missing or not owned by the caller |
 | 409 | `EXECUTION_NOT_CANCELLABLE` | Cancellation is incompatible with the current state |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Existing UUID was submitted with a different request fingerprint |
@@ -1374,7 +1749,7 @@ The frontend should use stable error codes rather than parsing human-readable me
 
 A rejected execution request does not create an accepted execution resource.
 
-A conflicting idempotency-key reuse does not modify the original request, its fingerprint, or its execution state.
+A conflicting idempotency-key reuse does not modify the original request, its fingerprint, key version, snapshot, or execution state.
 
 Existing API-wide error envelope conventions apply to all endpoint-specific errors.
 
@@ -1394,6 +1769,8 @@ Logs may include:
 - Authenticated user identifier where appropriate.
 - Error category.
 - Relevant execution-request identifier.
+- Non-sensitive execution state transitions.
+- Non-sensitive connection configuration version metadata where operationally justified.
 
 Logs must not contain:
 
@@ -1405,8 +1782,12 @@ Logs must not contain:
 - Sensitive request payloads.
 - HMAC key material.
 - Sensitive canonical request contents.
+- Plaintext or encrypted execution-snapshot credential material.
+- Encryption nonces or authentication tags.
 
 A request fingerprint may be logged only if operationally justified and safe under the logging policy. It is not required for ordinary request logging.
+
+The non-secret fingerprint key-version identifier may be recorded where necessary for operational diagnostics, but it must not be confused with key material.
 
 Operational logs and user-visible query history are separate systems.
 
@@ -1436,33 +1817,61 @@ API testing will cover:
 16. Canonical fingerprint stability when JSON property ordering differs.
 17. Fingerprint changes when target, SQL, or relevant execution options change.
 18. Protection of HMAC key material and fingerprint-generation secrets.
-19. Concurrent execution limits.
-20. Stale connection configuration updates.
-21. Cancellation and recovery behavior.
-22. Query-history opt-out.
-23. Administrator authorization.
-24. Consistent error responses.
-25. Integration with MySQL.
-26. Atomic execution-claim and query-history creation.
-27. Failure to create required query history before execution.
-28. Prevention of external execution when the required transaction rolls back.
-29. Result availability after cache expiry.
-30. Result availability after cache eviction.
-31. Result availability after backend restart.
-32. Correct distinction between restart, expiry, eviction, and generic unavailability.
-33. Prevention of automatic query re-execution when cached results are missing.
-34. Execution lifecycle preservation when result data is unavailable.
-35. Result ownership isolation between authenticated users.
-36. Enforcement of result-cache TTL and capacity limits.
-37. Account-deletion blocking while execution requests remain unresolved.
-38. Preservation of administrative audit records after account deletion.
-39. Correct built-in sample target resolution.
-40. Rejection of client-supplied built-in sample connection credentials or destination overrides.
-41. Query-history retention based on `executed_at`.
-42. Deterministic query-history cursor pagination.
-43. Correct mapping of database `rows_returned` to API `returnedRows`.
-44. Confirmation that `rows_returned` represents the bounded returned result window, not the total matching row count.
-45. Confirmation that `rows_affected` remains independent of `rows_returned` and `returnedRows`.
+19. Verification that new requests use the active HMAC key version.
+20. Verification that retries use the original stored HMAC key version after rotation.
+21. Verification that old HMAC keys cannot be retired while retained requests depend on them.
+22. Concurrent execution limits.
+23. Stale connection configuration updates.
+24. Connection snapshot creation against the exact accepted `configVersion`.
+25. Prevention of snapshot changes after acceptance.
+26. Execution continuation after the original saved connection is updated.
+27. Execution continuation after the original saved connection is deleted.
+28. Prevention of new executions using a deleted connection.
+29. Snapshot credential encryption and backend-only decryption.
+30. Prevention of plaintext credential exposure.
+31. Cancellation and recovery behavior.
+32. Atomic cancellation of a `claimed` request.
+33. Atomic worker transition from `claimed` to `running`.
+34. Race testing between claimed-state cancellation and worker startup.
+35. Prevention of external execution when cancellation wins.
+36. Prevention of false cancellation when worker startup wins.
+37. Confirmation of external termination before cancelling a running request.
+38. Query-history opt-out.
+39. Query-history deletion while an execution is active.
+40. Confirmation that deleting history does not alter execution state.
+41. Completion and recovery when the associated history record no longer exists.
+42. Prevention of automatic recreation of deleted history.
+43. Administrator authorization.
+44. Consistent error responses.
+45. Integration with MySQL.
+46. Atomic execution-claim and query-history creation.
+47. Atomic execution-claim and configuration-snapshot creation.
+48. Failure to create required query history before execution.
+49. Failure to create a required configuration snapshot before execution.
+50. Prevention of external execution when the required transaction rolls back.
+51. Result availability after cache expiry.
+52. Result availability after cache eviction.
+53. Result availability after backend restart.
+54. Correct distinction between restart, expiry, eviction, and generic unavailability.
+55. Prevention of automatic query re-execution when cached results are missing.
+56. Execution lifecycle preservation when result data is unavailable.
+57. Result ownership isolation between authenticated users.
+58. Enforcement of result-cache TTL and capacity limits.
+59. Account-deletion blocking while execution requests remain unresolved.
+60. Preservation of administrative audit records after account deletion.
+61. Correct built-in sample target resolution.
+62. Rejection of client-supplied built-in sample connection credentials or destination overrides.
+63. Query-history retention based on `accepted_at`.
+64. Deterministic query-history cursor pagination.
+65. Correct mapping of database `rows_returned` to API `returnedRows`.
+66. Confirmation that `rows_returned` represents the bounded returned result window, not the total matching row count.
+67. Confirmation that `rows_affected` remains independent of `rows_returned` and `returnedRows`.
+68. Successful verification through an unverified authenticated session.
+69. Access to the current-session endpoint for an unverified account.
+70. Successful verification-email resend within configured limits.
+71. Rejection of protected product endpoints for an unverified account.
+72. Confirmation that email verification enables normal protected functionality without changing `accountStatus`.
+73. Confirmation that suspended accounts remain restricted even after email verification.
 
 Automated tests must verify that one user cannot retrieve, modify, or delete another user's resources.
 
@@ -1486,6 +1895,9 @@ The following details will be finalized during implementation and API contract t
 10. Exact physical representation of cache-generation tracking and bounded tombstone metadata.
 11. Exact canonical serialization procedure for execution-request fingerprint generation.
 12. HMAC algorithm, key provisioning, key-version representation, and rotation procedure.
+13. Exact physical representation of the immutable execution-configuration snapshot association.
+14. Exact physical representation of the optional query-history association.
+15. Exact response metadata for accepted connection configuration versions where needed for operational diagnostics.
 
 These details must not contradict the security and lifecycle rules already established.
 
@@ -1495,21 +1907,35 @@ The following are finalized logical API requirements, not optional implementatio
 - Per-user execution idempotency.
 - Canonical request fingerprinting for accepted execution requests.
 - Same UUID and matching fingerprint means replay of the existing request.
+- Existing requests are verified using their original stored HMAC key version.
 - Same UUID and different fingerprint means HTTP 409 Conflict with `IDEMPOTENCY_KEY_REUSED`.
 - Original-request preservation during replay.
 - No duplicate execution or query-history record on replay.
 - No execution or query-history record on conflicting UUID reuse.
-- Atomic execution-claim, request-fingerprint, and required query-history creation.
+- Atomic execution-claim, request-fingerprint, fingerprint-key-version, and required query-history creation.
+- Atomic creation of the required saved-connection execution snapshot.
 - Prevention of external execution if the required transaction fails.
+- Immutable accepted connection configuration.
+- Independence of accepted executions from later connection updates or deletion.
+- Atomic worker transition from `claimed` to `running` before external execution.
+- Atomic cancellation transition from `claimed` to `cancelled`.
+- The winner of the cancellation-versus-worker-start transition determines whether external execution may begin.
+- Confirmation of external termination before terminal cancellation of a running request.
 - Result-availability semantics.
 - Cache-generation association for distinguishing backend restart from same-process cache loss.
 - Bounded expiry and eviction metadata.
 - No automatic query re-execution to reconstruct missing results.
 - Execution tracking when query-history recording is disabled.
+- Independence of execution lifecycle from query-history deletion.
+- Tolerance of missing history records during completion and recovery.
+- No automatic recreation of deleted history records.
 - Account-deletion blocking while associated executions remain unresolved.
-- Query-history retention of 90 days from `executed_at`.
+- Query-history retention of 90 days from `accepted_at`.
 - Mapping of database `rows_returned` to API `returnedRows`.
 - Separation of `rows_returned` from `rows_affected`.
+- Limited authenticated sessions for unverified accounts.
+- Backend enforcement of email-verification restrictions on protected functionality.
+- Verification-related endpoints remaining accessible to eligible unverified sessions.
 
 ---
 
