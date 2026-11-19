@@ -38,5 +38,10 @@ export const env = {
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         name: process.env.DB_NAME
+    },
+
+    migrationDatabase: {
+        user: process.env.DB_MIGRATION_USER,
+        password: process.env.DB_MIGRATION_PASSWORD
     }
 }

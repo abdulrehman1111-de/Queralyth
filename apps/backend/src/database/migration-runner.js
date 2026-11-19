@@ -12,7 +12,7 @@ const currentDirectory = path.dirname(currentFilePath);
 
 const migrationsDirectory = path.resolve(
   currentDirectory,
-  "../../../../database/migrations",
+    "./migrations",
 );
 
 async function createMigrationTable(connection) {
@@ -35,8 +35,8 @@ async function createMigrationConnection() {
   return mysql.createConnection({
     host: env.database.host,
     port: env.database.port,
-    user: env.database.user,
-    password: env.database.password,
+    user: env.migrationDatabase.user,
+    password: env.migrationDatabase.password,
     database: env.database.name,
 
     charset: "utf8mb4",
@@ -60,11 +60,13 @@ async function getMigrationFiles() {
       return identifierA - identifierB;
     });
 
-  if(files.length === 0){
+  if (files.length === 0) {
     throw new Error(
-        `No SQL migration files found in: ${migrationsDirectory}`
-    )
-  }  
+      `No SQL migration files found in: ${migrationsDirectory}`,
+    );
+  }
+
+  return files;
 }
 
 async function calculateChecksum(filepath) {
