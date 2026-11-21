@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "db:migrate": "node src/database/migration-runner.js"
+    "db:migrate": "node src/database/migration-runner.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@queralyth/query-engine": "0.1.0",
