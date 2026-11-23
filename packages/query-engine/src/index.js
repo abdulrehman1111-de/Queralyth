@@ -7,28 +7,66 @@ export function getQueryEngineInfo() {
   return {
     name: "queralyth-query-engine",
     version: QUERY_ENGINE_VERSION,
-    status: "initialized"
+    status: "initialized",
   };
 }
 
-export function removeComments(sqlStatement){
+export function removeComments(sqlStatement) {
+  const sqlCommentRemoved = sqlScanner(sqlStatement);
 
-  const sqlCommentRemoved = sqlStatement.replace(/--[ \t].*/, "")
-
-  return sqlCommentRemoved
+  return sqlCommentRemoved;
 }
 
-export function classifyStatement(sqlStatement){
-  
-  if(sqlStatement.trim().length === 0){
+export function classifyStatement(sqlStatement) {
+  if (sqlStatement.trim().length === 0) {
     return {
-      type: "UNKNOWN"
-    }
+      type: "UNKNOWN",
+    };
   }
 
-  const sqlStatementType = sqlStatement.trim().split(/\s+/)[0].toUpperCase()
+  const sqlStatementType = sqlStatement.trim().split(/\s+/)[0].toUpperCase();
 
   return {
-    type: sqlStatementType
+    type: sqlStatementType,
+  };
+}
+
+export function sqlScanner(sqlStatement) {
+  let scannedSql = "";
+  let insideSingleQuote = false;
+  let counter = 0;
+  for (let i = 0; i < sqlStatement.length; i++) {
+    if (
+      !insideSingleQuote &&
+      sqlStatement[i] === "-" &&
+      sqlStatement[i + 1] === "-" &&
+      /[\s\u0000-\u001F]/.test(sqlStatement[i + 2] ?? "")
+    ) {
+      while (i < sqlStatement.length && sqlStatement[i] !== "\n") {
+        i++;
+      }
+      if(i === sqlStatement.length){
+        break
+      }
+    }
+
+    if (sqlStatement[i] === "'" && counter === 0) {
+      insideSingleQuote = true;
+      counter = 1;
+    } else if (sqlStatement[i] === "'" && counter === 1) {
+      if (sqlStatement[i + 1] === "'") {
+        insideSingleQuote = true;
+        scannedSql += "''";
+        i++;
+        continue;
+      } else {
+        insideSingleQuote = false;
+        counter = 0;
+      }
+    }
+
+    scannedSql += sqlStatement[i];
   }
+
+  return scannedSql;
 }
